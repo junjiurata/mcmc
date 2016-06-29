@@ -23,13 +23,12 @@
 
 #define NODES 24
 #define LINKS 576   //24*24
-#define TRY 1 // number of sampling
+#define TRY 35000 // number of sampling
 
 // exogenous parameter
-const double BETA   = 0.030;
-const double ALPHA3 = 0.0030; // ALPHA3/ALPHA1 = 10000 ~ 500000, small dif of OD cost: 1/100
+const double BETA   = 0.15;
+const double ALPHA3 = 0.0050; // ALPHA3/ALPHA1 = 10000 ~ 500000, small dif of OD cost: 1/100
 const double ALPHA1 = 1.0;
-const double SIGMA0 = 0.245946;   // Calculated for balancing
 const int OBJ = LINKS - NODES;  // for cell choice
 
 // 構造体定義
@@ -41,51 +40,50 @@ struct link{
 
 // 関数プロトタイプ
 void fileinod(int *od);
-void fileinod00(double *od);
+void fileinod00(int *od);
 struct link *fileinli(void);
 double linkcost(int onode, int dnode, link *li);
 int fact(int n);
 double logfact(int n);
 double logfact3(int n);
-int poisson(double ave);
-int logpoisson(double ave, double *psamp);
-double energy (int *oi, int *dj, double c, int *oiz, int *djz, double cz, double *odz);
-double ermsq (int *od, double *odz);
+double energy (int *oi, int *dj, double c, int *oiz, int *djz, double cz, int *odz);
+double ermsq (int *od, int *odz);
 double ermsqod (int *oi, int *oiz);
-void randombec(double *sortbec);
-void quick(double *row, int left, int right);
-void atdif(double *sortbec, int oave, double *volm);
-double rand_normal(double mu, double sigma);
-double rand_truncated_normal(double mu, double sigma);
-//double r_cdf_truncated_normal(double x, double mu, double sigma);
-double cdf_truncated_normal(double x, double mu, double sigma);
-double r2_cdf_truncated_normal(double x, double mu, double sigma);
 int sumod(int *oiz);
 int cellchoice();
+double ent(int *odz);
+//int poisson(double ave);
+//int logpoisson(double ave, double *psamp);
+//void randombec(double *sortbec);
+//void quick(double *row, int left, int right);
+//void atdif(double *sortbec, int oave, double *volm);
+//double rand_normal(double mu, double sigma);
+//double rand_truncated_normal(double mu, double sigma);
+//double r_cdf_truncated_normal(double x, double mu, double sigma);
+//double cdf_truncated_normal(double x, double mu, double sigma);
+//double r2_cdf_truncated_normal(double x, double mu, double sigma);
 
 // グローバル変数
 static struct link li[LINKS];
 static int od[NODES*NODES];
-static double odz[NODES*NODES];   // sampled(final)
-static double odzo[NODES*NODES];   // sampled from ave of O
-static double odzd[NODES*NODES];   // sampled from ave of D
-static double odp[NODES*NODES];    // initial sample & accepted sample
+static int odz[NODES*NODES];   // sampled(final)
+static int odp[NODES*NODES];    // initial sample & accepted sample
 //static double odac[NODES*NODES];  // accepted
-static double sortbec[NODES];
-static double volm[NODES-1];
-static double psamp;
+//static double sortbec[NODES];
+//static double volm[NODES-1];
+//static double psamp;
 
 int main(void) {
     int h, i, j, k;
     int accept=0;
-    int oi[NODES]={}, dj[NODES]={}, oave, dave;
+    int oi[NODES]={}, dj[NODES]={};
     int oip[NODES]={}, djp[NODES]={};
     double ene, enep, ratio, c=0.0, cp=0.0;
     init_genrand((unsigned)time(NULL));
-    double out[TRY], outO[TRY], outD[TRY], outE[TRY], outC[TRY], outOD[TRY];
+    double out[TRY], outO[TRY], outD[TRY], outE[TRY], outC[TRY], outEN[TRY];
     //double odt[NODES*NODES];
     char fname[50];
-    int rem, add;
+    int rem, add, outOD[TRY];
     FILE *fw;
 
     ////////////////////////////////////////////////////////////////
@@ -104,11 +102,10 @@ int main(void) {
         }
     }
     // printf("%d %d %d \n", oi[0], oi[1], oi[2]);
-    // printf("%d %d %d %d \n", dj[0], dj[1], dj[2], c);
+    // printf("%d %d %d %.1f \n", dj[0], dj[1], dj[2], c);
     //for(i = 0; i < NODES*NODES; i++){
     //    odt[i] = double(od[i]);
     //}
-    //printf("ENT of TRUE OD: %.3f", energy(oi, dj, c, oi, dj, c, odt));
 
     //* Initial OD table 
     fileinod00(odp);
@@ -120,8 +117,8 @@ int main(void) {
             cp += odp[i*NODES+j] * linkcost(i+1, j+1, LI);
         }
     }
-        // printf("%d %d %d \n", oip[0], oip[1], oip[2]);
-        // printf("%d %d %d %d \n", djp[0], djp[1], djp[2], cp);
+    //     printf("%d %d %d \n", oip[0], oip[1], oip[2]);
+    //     printf("%d %d %d %.2f \n", djp[0], djp[1], djp[2], cp);
 
     enep = energy(oi, dj, c, oip, djp, cp, odp);
     //enep = -9999999.9;
@@ -138,49 +135,29 @@ int main(void) {
         outD[h]  = -99.0;
         outE[h]  = -99.0;
         outC[h]  = -99.0;
-        //psamp = 0.0;
         int oiz[NODES]={}, djz[NODES]={};
-        double cz=0.0;
+        double cz= 0.0;
 
         for (i = 0; i < LINKS; i++){
             *(odz + i) = *(odp + i);    //update (accepted sample)
         }
         
-        if(h % 3 == 0){ // Exchange
+    //    if(h % 3 == 0){ // Exchange
             do{
                 rem = cellchoice();
             } while(odz[rem]==0);
             add = cellchoice();
             odz[rem] -= 1;
             odz[add] += 1;
-        } else if(h % 3 == 1){  // Add
+    //    } else if(h % 3 == 1){  // Add
             add = cellchoice();
             odz[add] += 1;
-        } else {    // Remove
+    //   } else {    // Remove
             do{
                 rem = cellchoice();
             } while(odz[rem]==0);
             odz[rem] -= 1;            
-        }
-        
-/*        for(i = 0; i < NODES; i++){
-            for(j = 0; j < NODES; j++){
-                if(i != j){
-                    sigp = (odp[i*NODES+j]!=0.0)*(log(1.5 + odp[i*NODES+j]/7)) + (odp[i*NODES+j]==0.0)*SIGMA0;
-                    odz[i*NODES+j] = round(rand_truncated_normal(odp[i*NODES+j], sigp));  // ADD Sigma
-                    po += r2_cdf_truncated_normal(odz[i*NODES+j], odp[i*NODES+j], sigp);  // ADD Sigma
-                    sigz = (odz[i*NODES+j]!=0.0)*(log(1.5 + odz[i*NODES+j]/7)) + (odz[i*NODES+j]==0.0)*SIGMA0;
-                    // printf("SIG: (%d) %.5f\n", (odz[i*NODES+j]==0.0), sigz);
-                    pprev += r2_cdf_truncated_normal(odp[i*NODES+j], odz[i*NODES+j], sigz);  // ADD Sigma
-                    // printf("%.2f %.2f %.2f %.2f %.1f %.1f\n", sigp, sigz, pprev, po, odp[i*NODES+j], odz[i*NODES+j]);
-                } else {
-                    odz[i*NODES+j] = 0.0;
-                }
-                //printf("\n");
-            }
-        }
-            //printf("po:%.3f pprev:%.3f \n", po, pprev);
-*/
+    //    }
         
         // total O & D & cost of sample 
         for(i = 0; i < NODES; i++){ 
@@ -194,7 +171,7 @@ int main(void) {
             // printf("%d %d %d %.3f\n", oiz[0], djz[1], djz[2], cz);
         ene = energy(oi, dj, c, oiz, djz, cz, odz);
             // printf("\n %.7f %.7f %.7f", ene, enep, ene / enep);
-        outOD[h] = double(sumod(oiz));
+        outOD[h] = sumod(oiz);
       
         if(BETA*(ene-enep) > 0){ // Accept *log(1)=0)
               accept++;
@@ -206,18 +183,19 @@ int main(void) {
               outD[h] = ermsqod(dj, djz);
               outE[h] = ene;
               outC[h] = cz;
+              outEN[h] = ent(odz);
                    
               sprintf(fname, "D:/od-mcmc/c-result/res-od/odtable-%d.csv", h);
               if ((fw = fopen(fname, "w")) != NULL){
                 for (i = 0; i < LINKS; i++){
-                    fprintf(fw, "%f\n", *(odz + i));
+                    fprintf(fw, "%d\n", *(odz + i));
                     *(odp + i) = *(odz + i);    //update (accepted sample)
                 }
                 fclose(fw);
             }
         } else {
             ratio = exp(BETA*(ene - enep));
-                 printf("Ratio: %.3f, Dene: %.1f(%.1f) cost:%.1f\n", ratio, BETA*(ene - enep), ene, cz);  //write
+                 printf("Dene: %.1f cost:%.1f, Ratio: %.3f\n", BETA*(ene - enep), cz, ratio);  //write
             if(isnan(ratio)==0){
                 if(ratio >= genrand_real3()){   // Accept
                     accept++;
@@ -228,11 +206,12 @@ int main(void) {
                     outD[h] = ermsqod(dj, djz);
                     outE[h] = ene;
                     outC[h] = cz;
-              
+                    outEN[h] = ent(odz);
+               
                     sprintf(fname, "D:/od-mcmc/c-result/res-od/odtable-%d.csv", h);
                     if ((fw = fopen(fname, "w")) != NULL){
                         for (i = 0; i < LINKS; i++){
-                            fprintf(fw, "%f\n", *(odz + i));
+                            fprintf(fw, "%d\n", *(odz + i));
                             *(odp + i) = *(odz + i);    //update (accepted sample)
                         }
                         fclose(fw);
@@ -276,25 +255,31 @@ int main(void) {
     }
     if ((fw = fopen("D:/od-mcmc/c-result/totalod.csv", "w")) != NULL){
 	for (h = 0; h < TRY; h++){
-		fprintf(fw, "%f\n", *(outOD + h));
+		fprintf(fw, "%d\n", *(outOD + h));
+	}
+	fclose(fw);
+    }
+    if ((fw = fopen("D:/od-mcmc/c-result/entropy.csv", "w")) != NULL){
+	for (h = 0; h < TRY; h++){
+		fprintf(fw, "%f\n", *(outEN + h));
 	}
 	fclose(fw);
     }
     
     printf("\nACCEPT:%d ", accept);
-    printf("\ntrue.cost:%.2f %d %d %d", c, oi[1], dj[2], sumod(oi));
+    printf("\nTRUE: cost:%.2f sumod:%d entropy:%.3f", c, sumod(oi), ent(od));
 
     return 0;
 }
 
 /* ERROR of MEAN SQUARE */
-double ermsq (int *od, double *odz){
+double ermsq (int *od, int *odz){
     int i;
     double err = 0.0;
     double sd;
     
     for(i=0; i < NODES*NODES; i++){
-        err += pow(odz[i]-od[i], 2);
+        err += pow(odz[i]-od[i], 2.0);
     }
     sd = pow((err/(NODES*NODES)), 0.5);
     // printf("\n%.5f", pow(3/4, 0.5));
@@ -309,7 +294,7 @@ double ermsqod (int *oi, int *oiz){
     double sd;
     
     for(i=0; i < NODES; i++){
-        err += pow(oiz[i]-oi[i], 2);
+        err += pow(oiz[i]-oi[i], 2.0);
     }
     sd = pow((err/(NODES)), 0.5);
     // printf("\n%.5f", pow(3/4, 0.5));
@@ -327,7 +312,7 @@ int sumod(int *oiz){
 }
 
 /* CALCULATE energy term  (equation (11) of resume at May 31)*/
-double energy (int *oi, int *dj, double c, int *oiz, int *djz, double cz, double *odz){
+double energy (int *oi, int *dj, double c, int *oiz, int *djz, double cz, int *odz){
     int total = 0;
     double conbi = 0.0;
     int i, rodz;
@@ -342,13 +327,31 @@ double energy (int *oi, int *dj, double c, int *oiz, int *djz, double cz, double
     count = logfact3(total) + logfact3(total-1) + logfact3(total-2) - conbi;
             
     for(i = 0; i < NODES; i++){
-        peo += pow(*(oiz + i) - *(oi + i), 2);
-        ped += pow(*(djz + i) - *(dj + i), 2);
+        peo += pow(*(oiz + i) - *(oi + i), 2.0);
+        ped += pow(*(djz + i) - *(dj + i), 2.0);
     }
     penal = ALPHA3 * pow(cz - c, 2) + ALPHA1 * peo + ALPHA1 * ped;
-      printf("peo:%.1f ped:%.1f c:%.1f penal:%.1f\n", ALPHA1 * peo, ALPHA1 * ped, ALPHA3 * pow(cz - c, 2), penal);    //write
+      printf("ent:%.1f peo:%.1f ped:%.1f Dc:%.1f\n", count, ALPHA1 * peo, ALPHA1 * ped, ALPHA3 * pow(cz - c, 2));    //write
     
     return count - penal;
+}
+
+/* CALCULATE energy term  (equation (11) of resume at May 31)*/
+double ent (int *odz){
+    int total = 0;
+    double conbi = 0.0;
+    int i, rodz;
+    double count;
+    
+    for(i = 0; i < NODES*NODES; i++){
+        rodz = odz[i];
+        total += rodz;
+        conbi += logfact(rodz);
+    }
+    // printf("\ntotal:%d conbi:%.1f logfact(total):%.1f", total, conbi, logfact(total));
+    count = logfact3(total) + logfact3(total-1) + logfact3(total-2) - conbi;
+            
+    return count;
 }
 
 /* FACTORIAL function for poisson distribution */
@@ -417,13 +420,15 @@ int cellchoice(){
 }
 
 // Normal Distribution  // http://www.sat.t.u-tokyo.ac.jp/~omi/random_variables_generation.html#Gauss
+/*
 double rand_normal(double mu, double sigma){  //
     //double sigma = 1.0; //σ=1.0 fixed
     double z = sqrt(-2.0*log(genrand_real3())) * sin(2.0*M_PI*genrand_real3() );
     return mu + sigma * z;
- }
+ }*/
 
 // Truncated Normal Distribution
+/*
 double rand_truncated_normal(double mu, double sigma){  //double sigma
     double x = rand_normal(mu, sigma);
     if(mu!=0.0){
@@ -442,9 +447,10 @@ double rand_truncated_normal(double mu, double sigma){  //double sigma
         }
     }
     printf("ERROR![rand_truncated_normal:%.3f-%.3f]\n", mu, sigma);
-}
+}*/
 
 // c.d.f [Truncated Normal Distribution]
+/*
 double r2_cdf_truncated_normal(double x, double mu, double sigma){  //double sigma
     double p;   //sigma = 1
     if(mu != 0.0){
@@ -458,11 +464,12 @@ double r2_cdf_truncated_normal(double x, double mu, double sigma){  //double sig
     }
     //printf("P:%.3f ",p);
     return log(p);
-}
+}*/
 
+/*
 double cdf_truncated_normal(double x, double mu, double sigma){
     return 0.5 * (1 + erf((x-mu)/pow(2*sigma*sigma, 0.5)));
-}
+}*/
 
 /* READ a OD table file */
 void fileinod(int *od){
@@ -484,10 +491,10 @@ void fileinod(int *od){
     fclose(fp);
 }
 
-void fileinod00(double *od){
+void fileinod00(int *od){
     FILE *fp;
     char *fname = "odtable-row-ini2.csv";  // should be row style not table
-    double cell;
+    int cell;
     int i =0, ret;
     
     fp = fopen(fname, "r");
@@ -495,7 +502,7 @@ void fileinod00(double *od){
         printf("file %s can't be opened\n", fname);
     }
     
-    while((ret = fscanf(fp, "%lf", &cell))!=EOF){
+    while((ret = fscanf(fp, "%d", &cell))!=EOF){
         od[i] = cell;
         i++;
     }
