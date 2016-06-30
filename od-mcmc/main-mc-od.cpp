@@ -26,9 +26,9 @@
 #define TRY 35000 // number of sampling
 
 // exogenous parameter
-const double BETA   = 0.15;
-const double ALPHA3 = 0.0050; // ALPHA3/ALPHA1 = 10000 ~ 500000, small dif of OD cost: 1/100
-const double ALPHA1 = 1.0;
+const double BETA   = 0.05;
+const double ALPHA3 = 0.0020; // ALPHA3/ALPHA1 = 10000 ~ 500000, small dif of OD cost: 1/100
+const double ALPHA1 = 0.2;
 const int OBJ = LINKS - NODES;  // for cell choice
 
 // 構造体定義
@@ -84,6 +84,7 @@ int main(void) {
     //double odt[NODES*NODES];
     char fname[50];
     int rem, add, outOD[TRY];
+    int inc=0, dec=0;   // number of accepted 
     FILE *fw;
 
     ////////////////////////////////////////////////////////////////
@@ -137,27 +138,38 @@ int main(void) {
         outC[h]  = -99.0;
         int oiz[NODES]={}, djz[NODES]={};
         double cz= 0.0;
-
+        int it = 0; //number of iteration
+        int it_limit = 10;
+        
         for (i = 0; i < LINKS; i++){
             *(odz + i) = *(odp + i);    //update (accepted sample)
         }
         
-    //    if(h % 3 == 0){ // Exchange
-            do{
+        if(h % 3 == 0){ // Exchange
+            while(it < it_limit){
                 rem = cellchoice();
-            } while(odz[rem]==0);
-            add = cellchoice();
-            odz[rem] -= 1;
-            odz[add] += 1;
-    //    } else if(h % 3 == 1){  // Add
-            add = cellchoice();
-            odz[add] += 1;
-    //   } else {    // Remove
-            do{
+                if(odz[rem]!=0){
+                    add = cellchoice();
+                    odz[rem] -= 1;
+                    odz[add] += 1;
+                }
+                it += 1;
+            }
+        } else if(h % 3 == 1){  // Add
+            while(it < it_limit){
+                add = cellchoice();
+                odz[add] += 1;
+                it += 1;
+            }
+       } else {    // Remove
+            while(it < it_limit){
                 rem = cellchoice();
-            } while(odz[rem]==0);
-            odz[rem] -= 1;            
-    //    }
+                if(odz[rem]!=0){
+                    odz[rem] -= 1;
+                }
+                it += 1;
+            }
+        }
         
         // total O & D & cost of sample 
         for(i = 0; i < NODES; i++){ 
@@ -175,7 +187,12 @@ int main(void) {
       
         if(BETA*(ene-enep) > 0){ // Accept *log(1)=0)
               accept++;
-               printf("Dene: %.2f, cost: %.1f \n", BETA*(ene - enep), cz);    //write
+              if(h % 3 == 1){
+                  inc++;
+              } else if(h % 3 == 2){
+                  dec++;
+              }
+              // printf("Dene: %.2f, cost: %.1f \n", BETA*(ene - enep), cz);    //write
               enep = ene;
                printf("[%d]OK!\n", h);
               out[h] = ermsq(od, odz);
@@ -185,7 +202,7 @@ int main(void) {
               outC[h] = cz;
               outEN[h] = ent(odz);
                    
-              sprintf(fname, "D:/od-mcmc/c-result/res-od/odtable-%d.csv", h);
+              sprintf(fname, "D:/od-mcmc/c-result/res-od/odtable-%d.csv", h);//+TRY*2
               if ((fw = fopen(fname, "w")) != NULL){
                 for (i = 0; i < LINKS; i++){
                     fprintf(fw, "%d\n", *(odz + i));
@@ -195,10 +212,15 @@ int main(void) {
             }
         } else {
             ratio = exp(BETA*(ene - enep));
-                 printf("Dene: %.1f cost:%.1f, Ratio: %.3f\n", BETA*(ene - enep), cz, ratio);  //write
+             //    printf("Dene: %.1f cost:%.1f, Ratio: %.3f\n", BETA*(ene - enep), cz, ratio);  //write
             if(isnan(ratio)==0){
                 if(ratio >= genrand_real3()){   // Accept
                     accept++;
+                  if(h % 3 == 1){
+                      inc++;
+                  } else if(h % 3 == 2){
+                      dec++;
+                  }
                     enep = ene;
                      printf("[%d] POK!!\n", h);
                     out[h] = ermsq(od, odz);
@@ -208,7 +230,7 @@ int main(void) {
                     outC[h] = cz;
                     outEN[h] = ent(odz);
                
-                    sprintf(fname, "D:/od-mcmc/c-result/res-od/odtable-%d.csv", h);
+                    sprintf(fname, "D:/od-mcmc/c-result/res-od/odtable-%d.csv", h);//+TRY*2
                     if ((fw = fopen(fname, "w")) != NULL){
                         for (i = 0; i < LINKS; i++){
                             fprintf(fw, "%d\n", *(odz + i));
@@ -266,7 +288,7 @@ int main(void) {
 	fclose(fw);
     }
     
-    printf("\nACCEPT:%d ", accept);
+    printf("\nACCEPT:%d (Inc:%d Dec:%d)", accept, inc, dec);
     printf("\nTRUE: cost:%.2f sumod:%d entropy:%.3f", c, sumod(oi), ent(od));
 
     return 0;
@@ -331,7 +353,7 @@ double energy (int *oi, int *dj, double c, int *oiz, int *djz, double cz, int *o
         ped += pow(*(djz + i) - *(dj + i), 2.0);
     }
     penal = ALPHA3 * pow(cz - c, 2) + ALPHA1 * peo + ALPHA1 * ped;
-      printf("ent:%.1f peo:%.1f ped:%.1f Dc:%.1f\n", count, ALPHA1 * peo, ALPHA1 * ped, ALPHA3 * pow(cz - c, 2));    //write
+    //  printf("ent:%.1f peo:%.1f ped:%.1f Dc:%.1f\n", count, ALPHA1 * peo, ALPHA1 * ped, ALPHA3 * pow(cz - c, 2));    //write
     
     return count - penal;
 }
@@ -493,7 +515,8 @@ void fileinod(int *od){
 
 void fileinod00(int *od){
     FILE *fp;
-    char *fname = "odtable-row-ini2.csv";  // should be row style not table
+    //char *fname = "odtable-row-ini2.csv";  // should be row style not table
+        char *fname = "odtable-69995.csv";  // should be row style not table
     int cell;
     int i =0, ret;
     
