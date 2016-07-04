@@ -23,7 +23,8 @@
 
 #define NODES 24
 #define LINKS 576   //24*24
-#define TRY 30000 // number of sampling
+#define TRY 40000 // number of sampling
+#define MEM 30000 // number of sampling
 
 // exogenous parameter
 const double BETA   = 0.08;
@@ -74,16 +75,16 @@ static int odp[NODES*NODES];    // initial sample & accepted sample
 //static double psamp;
 
 int main(void) {
-    int h, i, j, k;
+    int h, i, j, k, hh=0, co=1, mrow;
     int accept=0;
     int oi[NODES]={}, dj[NODES]={};
     int oip[NODES]={}, djp[NODES]={};
     double ene, enep, ratio, c=0.0, cp=0.0;
     init_genrand((unsigned)time(NULL));
-    double out[TRY], outO[TRY], outD[TRY], outE[TRY], outC[TRY], outEN[TRY];
+    double out[MEM], outO[MEM], outD[MEM], outE[MEM], outC[MEM], outEN[MEM];
     //double odt[NODES*NODES];
     char fname[50];
-    int rem, add, outOD[TRY], outCELL[TRY];
+    int rem, add, outOD[MEM];//, outCELL[TRY]
     int inc=0, dec=0;   // number of accepted 
     FILE *fw;
 
@@ -131,12 +132,12 @@ int main(void) {
     ///////////////////////////////////////////////////////////////
     
     for(h=0; h < TRY; h++){
-        out[h]   = -99.0;
-        outO[h]  = -99.0;
-        outD[h]  = -99.0;
-        outE[h]  = -99.0;
-        outC[h]  = -99.0;
-        outCELL[h] = 0;
+        out[hh]   = -99.0;
+        outO[hh]  = -99.0;
+        outD[hh]  = -99.0;
+        outE[hh]  = -99.0;
+        outC[hh]  = -99.0;
+        //outCELL[h] = 0;
         int oiz[NODES]={}, djz[NODES]={};
         double cz= 0.0;
         int it = 0; //number of iteration
@@ -196,21 +197,21 @@ int main(void) {
                 //   printf("Dene: %.2f, cost: %.1f \n", BETA*(ene - enep), cz);    //write
               enep = ene;
               // printf("[%d]OK!\n", h);
-              out[h] = ermsq(od, odz);
-              outO[h] = ermsqod(oi, oiz);
-              outD[h] = ermsqod(dj, djz);
-              outE[h] = ene;
-              outC[h] = cz;
-              outEN[h] = ent(odz);
+              out[hh] = ermsq(od, odz);
+              outO[hh] = ermsqod(oi, oiz);
+              outD[hh] = ermsqod(dj, djz);
+              outE[hh] = ene;
+              outC[hh] = cz;
+              outEN[hh] = ent(odz);
                    
-              sprintf(fname, "D:/od-mcmc/c-result/res-od/odtable-%d.csv", h+TRY*4);//+TRY*2
+              sprintf(fname, "D:/od-mcmc/c-result/res-od/odtable-%d.csv", h);//+TRY*2
               if ((fw = fopen(fname, "w")) != NULL){
                 for (i = 0; i < LINKS; i++){
                     fprintf(fw, "%d\n", *(odz + i));
                     *(odp + i) = *(odz + i);    //update (accepted sample)
-                    if(*(odz + i)==0){
-                        outCELL[h]++;
-                    }
+                //    if(*(odz + i)==0){
+                  //      outCELL[h]++;
+                    //}
                 }
                 fclose(fw);
             }
@@ -227,21 +228,21 @@ int main(void) {
                     }
                     enep = ene;
                     // printf("[%d] POK!!\n", h);
-                    out[h] = ermsq(od, odz);
-                    outO[h] = ermsqod(oi, oiz);
-                    outD[h] = ermsqod(dj, djz);
-                    outE[h] = ene;
-                    outC[h] = cz;
-                    outEN[h] = ent(odz);
+                    out[hh] = ermsq(od, odz);
+                    outO[hh] = ermsqod(oi, oiz);
+                    outD[hh] = ermsqod(dj, djz);
+                    outE[hh] = ene;
+                    outC[hh] = cz;
+                    outEN[hh] = ent(odz);
                
-                    sprintf(fname, "D:/od-mcmc/c-result/res-od/odtable-%d.csv", h+TRY*4);//+TRY*2
+                    sprintf(fname, "D:/od-mcmc/c-result/res-od/odtable-%d.csv", h);//+TRY*2
                     if ((fw = fopen(fname, "w")) != NULL){
                         for (i = 0; i < LINKS; i++){
                             fprintf(fw, "%d\n", *(odz + i));
                             *(odp + i) = *(odz + i);    //update (accepted sample)
-                            if(*(odz + i)==0){
-                                outCELL[h]++;
-                            }
+                        //    if(*(odz + i)==0){
+                         //       outCELL[h]++;
+                           // }
                         }
                         fclose(fw);
                     }
@@ -250,55 +251,71 @@ int main(void) {
                 printf("obtain NA...\n");
             }
         }
-    }
         
-    if ((fw = fopen("D:/od-mcmc/c-result/errsd.csv", "w")) != NULL){
-	for (h = 0; h < TRY; h++){
-		fprintf(fw, "%f\n", *(out + h));
-	}
-	fclose(fw);
-    }
-    if ((fw = fopen("D:/od-mcmc/c-result/errsd-o.csv", "w")) != NULL){
-	for (h = 0; h < TRY; h++){
-		fprintf(fw, "%f\n", *(outO + h));
-	}
-	fclose(fw);
-    }
-    if ((fw = fopen("D:/od-mcmc/c-result/errsd-d.csv", "w")) != NULL){
-	for (h = 0; h < TRY; h++){
-		fprintf(fw, "%f\n", *(outD + h));
-	}
-	fclose(fw);
-    }
-    if ((fw = fopen("D:/od-mcmc/c-result/energy.csv", "w")) != NULL){
-	for (h = 0; h < TRY; h++){
-		fprintf(fw, "%f\n", *(outE + h));
-	}
-	fclose(fw);
-    }
-    if ((fw = fopen("D:/od-mcmc/c-result/cost.csv", "w")) != NULL){
-	for (h = 0; h < TRY; h++){
-		fprintf(fw, "%f\n", *(outC + h));
-	}
-	fclose(fw);
-    }
-    if ((fw = fopen("D:/od-mcmc/c-result/totalod.csv", "w")) != NULL){
-	for (h = 0; h < TRY; h++){
-		fprintf(fw, "%d\n", *(outOD + h));
-	}
-	fclose(fw);
-    }
-    if ((fw = fopen("D:/od-mcmc/c-result/cell0.csv", "w")) != NULL){
-	for (h = 0; h < TRY; h++){
-		fprintf(fw, "%d\n", *(outCELL + h));
-	}
-	fclose(fw);
-    }
-    if ((fw = fopen("D:/od-mcmc/c-result/entropy.csv", "w")) != NULL){
-	for (h = 0; h < TRY; h++){
-		fprintf(fw, "%f\n", *(outEN + h));
-	}
-	fclose(fw);
+        if((hh+1 == MEM)||(h == TRY-1)){
+            mrow = MEM;
+            if(h == TRY -1){
+                mrow = TRY % MEM;
+            }
+            sprintf(fname, "D:/od-mcmc/c-result/errsd%d.csv", co);
+            if ((fw = fopen(fname, "w")) != NULL){
+                for (hh = 0; hh < mrow; hh++){
+                    fprintf(fw, "%f\n", *(out + hh));
+                }
+                fclose(fw);
+            }
+            sprintf(fname, "D:/od-mcmc/c-result/errsd-o%d.csv", co);
+            if ((fw = fopen(fname, "w")) != NULL){
+                for (hh = 0; hh < mrow; hh++){
+                	fprintf(fw, "%f\n", *(outO + hh));
+                }
+                fclose(fw);
+            }
+            sprintf(fname, "D:/od-mcmc/c-result/errsd-d%d.csv", co);
+            if ((fw = fopen(fname, "w")) != NULL){
+                for (hh = 0; hh < mrow; hh++){
+                	fprintf(fw, "%f\n", *(outD + hh));
+                }
+                fclose(fw);
+            }
+            sprintf(fname, "D:/od-mcmc/c-result/energy%d.csv", co);
+            if ((fw = fopen(fname, "w")) != NULL){
+                for (hh = 0; hh < mrow; hh++){
+                	fprintf(fw, "%f\n", *(outE + hh));
+                }
+                fclose(fw);
+             }
+            sprintf(fname, "D:/od-mcmc/c-result/cost%d.csv", co);
+            if ((fw = fopen(fname, "w")) != NULL){
+                for (hh = 0; hh < mrow; hh++){
+                    fprintf(fw, "%f\n", *(outC + hh));
+                }
+                fclose(fw);
+            }
+            sprintf(fname, "D:/od-mcmc/c-result/totalod%d.csv", co);
+            if ((fw = fopen(fname, "w")) != NULL){
+                for (hh = 0; hh < mrow; hh++){
+                    fprintf(fw, "%d\n", *(outOD + hh));
+                }
+                fclose(fw);
+            }
+            //if ((fw = fopen("D:/od-mcmc/c-result/cell0.csv", "w")) != NULL){
+            //	for (h = 0; h < TRY; h++){
+            //		fprintf(fw, "%d\n", *(outCELL + h));
+            //	}
+            //	fclose(fw);
+            //   }
+            sprintf(fname, "D:/od-mcmc/c-result/entropy%d.csv", co);
+            if ((fw = fopen(fname, "w")) != NULL){
+                for (hh = 0; hh < mrow; hh++){
+                    fprintf(fw, "%f\n", *(outEN + hh));
+                }
+                fclose(fw);
+            }
+            hh = -1;
+            co++;
+        }
+        hh++;
     }
     
     printf("\nACCEPT:%d (Inc:%d Dec:%d)", accept, inc, dec);
@@ -529,8 +546,8 @@ void fileinod(int *od){
 
 void fileinod00(int *od){
     FILE *fp;
-    // char *fname = "odtable-row-ini2.csv";  // should be row style not table
-       char *fname = "odtable-119961.csv";  // should be row style not table
+     char *fname = "odtable-row-ini2.csv";  // should be row style not table
+    //  char *fname = "odtable-119994.csv";  // should be row style not table
     int cell;
     int i =0, ret;
     
