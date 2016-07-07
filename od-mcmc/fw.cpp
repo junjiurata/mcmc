@@ -81,7 +81,7 @@ void updateX(map<int, Node>& nodes, double al) {
 }
 
 // ダイクストラ法で最短経路を計算し，そこに指定交通量を加える
-void dijkstra(int start, int end, map<int, Node>& nodes, double traf){
+void dijkstra(int start, int end, map<int, Node>& nodes, int traf){
 #ifdef DEBUG
 	cerr << "ダイクストラ法" << endl;
                 cout << "O:" << start << " D:" << end << endl;
@@ -160,10 +160,10 @@ void dijkstra(int start, int end, map<int, Node>& nodes, double traf){
 
 // ダイクストラ法で最短経路を計算し，そこに指定交通量を加える
 double dijkstrafortable(int start, int end, map<int, Node>& nodes){
-//#ifdef DEBUG
+#ifdef DEBUG
 	cerr << "ダイクストラ法fortable" << endl;
                 cout << "O:" << start << " D:" << end << endl;
-//#endif
+#endif
 	for (map<int, Node>::iterator i = nodes.begin(); i != nodes.end(); i++) {
 		i->second.isDetermined = false;
 		i->second.isInf = true;
@@ -192,10 +192,10 @@ double dijkstrafortable(int start, int end, map<int, Node>& nodes){
 		}
 		if (doneNode == -1) break;  // どういう状況？: 更新対象がない状態
 		nodes[doneNode].isDetermined = true;
-//#ifdef DEBUG
+#ifdef DEBUG
 		cerr << "ノード " << doneNode << " のコストが " << nodes[doneNode].minCost << "に確定" << endl;
-//#endif
-                if(doneNode == end){    // dicstra 打ち切り
+#endif
+                if(doneNode == end){    // dijkstra 終端ノードが確定したら打ち切り
                     return nodes[doneNode].minCost;
                     break;
                 }
@@ -274,27 +274,25 @@ double convergence(map<int, Node>& nodes, double al, double linknum){
 	return errave;
 }
 
-void linkread(map<int, Node>& nodes){
+void linkread(map<int, Node>& nodes, int *LINKNUM){
         // 外部方からのデータ入力
         // linkデータ 始点ノード,終点ノード，旅行時間パラa，旅行時間パラb の要素を持つ
         Csv link("SiouxLinks2_mody.csv", ',' , true);
     
-	// ネットワークの構造を登録する
-	//map<int, Node> nodes;
 	//リンクの数の読み込み
-	int LINKNUM;
-	LINKNUM = link.getNumLines();
-        cout << LINKNUM << endl;
+	*LINKNUM = link.getNumLines();
+        cout << *LINKNUM << endl;
 	//リンクデータの読み込み
 	vector<int> fromnode;
 	vector<int> tonode;
 	vector<double> Costa;
 	vector<double> Costb;
+
         int st;
         std::string sst;
         double cos;
         std::string scos;
-	for (int i = 0; i<LINKNUM; i++){
+	for (int i = 0; i < *LINKNUM; i++){
                 sst = link.getData(i,"ST");
                 st = std::atoi(sst.c_str());
 		fromnode.push_back(st);
@@ -315,7 +313,7 @@ void linkread(map<int, Node>& nodes){
 	}
 }
 
-void iniod(vector<int> &start, vector<int> &end, vector<double> &odflow){
+void iniod(vector<int> &start, vector<int> &end, vector<int> &odflow){
         // odデータ スタートノード，エンドノード，OD交通量 の要素を持つ
         Csv od("odtable-row3.csv", ',' , true);
 
@@ -344,12 +342,10 @@ void iniod(vector<int> &start, vector<int> &end, vector<double> &odflow){
 	}
 }
 
-void fwolfe(map<int, Node>& nodes, vector<int> &start, vector<int> &end, vector<double> &odflow){
+void fwolfe(map<int, Node>& nodes, vector<int> &start, vector<int> &end, vector<int> &odflow, int *LINKNUM){
         int ODNUM = start.size();
+        // cout << " ODNUM:" << ODNUM << endl;
         // 最短経路を自由流旅行時間（交通量０のとき）で計算し，All-or-nothingを行う
-	int LINKNUM;
-	LINKNUM = link.getNumLines();
-        cout << ODNUM << ", " << LINKNUM << endl;
 
 	clearY(nodes);
 
@@ -374,7 +370,7 @@ void fwolfe(map<int, Node>& nodes, vector<int> &start, vector<int> &end, vector<
 		// 黄金分割法により最適なαを計算する
 		double alpha = gold(nodes);
 		//収束の判定
-		double ERR = convergence(nodes, alpha, LINKNUM);
+		double ERR = convergence(nodes, alpha, *LINKNUM);
 		if (ERR < EPS){
                         printf("%d回目で", k);
                         cout << "収束しました。\n";
@@ -386,6 +382,7 @@ void fwolfe(map<int, Node>& nodes, vector<int> &start, vector<int> &end, vector<
 		// 交通量をアップデートする
 		updateX(nodes, alpha);
 	}
-	printLinkData(nodes);
+	//printLinkData(nodes);
+        //printf("DIJKSTRA\n");
 }
 

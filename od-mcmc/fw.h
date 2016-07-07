@@ -68,14 +68,14 @@ void addLink(map<int, Node>& nodes, int from, int to, double a, double b);
 void clearY(map<int, Node>& nodes);
 void printLinkData(map<int, Node>& nodes);
 void updateX(map<int, Node>& nodes, double al);
-void dijkstra(int start, int end, map<int, Node>& nodes, double traf);
+void dijkstra(int start, int end, map<int, Node>& nodes, int traf);
 double dijkstrafortable(int start, int end, map<int, Node>& nodes);
 double obj(double al, map<int, Node> nodes);
 double gold(map<int, Node>& nodes);
 double convergence(map<int, Node>& nodes, double al, double linknum);
-void linkread(map<int, Node>& nodes);   // CHECK
-void iniod(vector<int> &start, vector<int> &end, vector<double> &odflow);
-void fwolfe(map<int, Node>& nodes, vector<int> &start, vector<int> &end, vector<double> &odflow);
+void linkread(map<int, Node>& nodes, int *LINKNUM);   // CHECK
+void iniod(vector<int> &start, vector<int> &end, vector<int> &odflow);
+void fwolfe(map<int, Node>& nodes, vector<int> &start, vector<int> &end, vector<int> &odflow, int *LINKNUM);
 
 #endif /* FW_H */
 

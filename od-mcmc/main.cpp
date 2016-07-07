@@ -26,12 +26,12 @@
 
 #define NODES 24
 #define LINKS 576   //24*24
-#define TRY 1 // number of sampling
-#define MEM 20000 // number of sampling
+#define TRY 15000   // number of sampling
+#define MEM 30000   // number of sampling
 
 // exogenous parameter
 const double BETA   = 0.08;
-const double ALPHA3 = 0.010; // ALPHA3/ALPHA1 = 10000 ~ 500000, small dif of OD cost: 1/100
+const double ALPHA3 = 10e-11; // ALPHA3/ALPHA1 = 10000 ~ 500000, small dif of OD cost: 1/100
 const double ALPHA1 = 2.00;
 const int OBJ = LINKS - NODES;  // for cell choice
 
@@ -43,25 +43,25 @@ struct odpair{
 };
 
 // 関数プロトタイプ
-void fileinod(int *od);
+//void fileinod(int *od);
 void fileinod00(int *od);
 struct odpair *fileinli(void);
 double linkcost(int onode, int dnode, odpair *li);
 int fact(int n);
 double logfact(int n);
 double logfact3(int n);
-double energy (int *oi, int *dj, double c, int *oiz, int *djz, double cz, int *odz);
-double ermsq (int *od, int *odz);
+double energy (int *oi, int *dj, double c, int *oiz, int *djz, double cz, vector<int> &odz);
+double ermsq (vector<int> &od, vector<int> &odz);
 double ermsqod (int *oi, int *oiz);
 int sumod(int *oiz);
 int cellchoice();
-double ent(int *odz);
+double ent(vector<int> &odz);
 
 // グローバル変数
 static struct odpair li[LINKS];
-static int od[NODES*NODES];
-static int odz[NODES*NODES];   // sampled(final)
-static int odp[NODES*NODES];    // initial sample & accepted sample
+//static int od[NODES*NODES];
+//static int odz[NODES*NODES];   // sampled(final)
+static int odpi[NODES*NODES];    // initial sample & accepted sample
        
 // main
 int main(void) {
@@ -72,58 +72,59 @@ int main(void) {
     double ene, enep, ratio, c=0.0, cp=0.0;
     init_genrand((unsigned)time(NULL));
     double out[MEM], outO[MEM], outD[MEM], outE[MEM], outC[MEM], outEN[MEM];
-    //double odt[NODES*NODES];
     char fname[50];
-    int rem, add, outOD[MEM];//, outCELL[TRY]
+    int rem, add, outOD[MEM];
     int inc=0, dec=0;   // number of accepted
     // FrankWorfe
     map<int, Node> nodes;
+    int linknum, ODNUM;
     vector<int> start;      //スタートノード
     vector<int> end;        //エンドノード
-    vector<double> odflow;  //OD交通量
+    vector<int> od;         //OD交通量
+    vector<int> odp;
+    vector<int> odz;
     FILE *fw;
-
-    struct odpair *LI;// = fileinli();
-        // printf("%d %d %d \n", (LI+1)->onode, (LI+1)->dnode, (LI+1)->cost);
+    struct odpair *LI = fileinli();
 
     ////////////////////////////////////////////////////////////////
     // True OD table
-    linkread(nodes);
-    iniod(start, end, odflow);
-    fwolfe(nodes, start, end, odflow);
-    int ODNUM = odflow.size();
-    /*
+    //fileinod(od);
+    linkread(nodes, &linknum);
+    iniod(start, end, od);
+    fwolfe(nodes, start, end, od, &linknum);
+    ODNUM = od.size();
+        //cout << "ODNUM "<< ODNUM << endl;
+    
     for (int i = 0; i<ODNUM; i++){
-        //if(odflow[i]!=0){
-        printf("%d\n", i);
         (LI+i)->onode = start[i];
         (LI+i)->dnode = end[i];
         (LI+i)->cost = dijkstrafortable(start[i], end[i], nodes);
-        //}
-    }*/
-
-    fileinod(od);
+        //printf("%d st:%d cost:%.2f\n", i, start[i], (LI+i)->cost);
+    }
 
     for(i = 0; i < NODES; i++){
         for(j = 0; j < NODES; j++){
-            oi[i] += odflow[i*NODES+j];     // constraint condition
-            dj[i] += odflow[i+j*NODES];
-        //    c += od[i*NODES+j] * linkcost(i+1, j+1, LI);    // 
+            oi[i] += od[i*NODES+j];     // constraint condition
+            dj[i] += od[i+j*NODES];
+            c += od[i*NODES+j] * linkcost(i+1, j+1, LI);    // 
+            // cout << start[i*NODES+j] << ", " << end[i*NODES+j] << ", " << i+1 << ", " << j+1 << endl;
         }
     }
-        // printf("%d %d %d \n", oi[0], oi[1], oi[2]);
-        // printf("%d %d %d %.1f \n", dj[0], dj[1], dj[2], c);
+    //cout << "COST: " << c << endl;
     
-    	//	for (int i = 0; i<ODNUM; i++){
-          //          if(odflow[i]!=0){
-	//		dijkstra(start[i], end[i], nodes, odflow[i]);
-          //          }
-	//	}
-
-
     //* Initial OD table 
-    fileinod00(odp);
-        // printf("%f %f %f \n", odp[0], odp[1], odp[3]);
+    fileinod00(odpi);   //randomにする
+        // printf("%d %d %d \n", odpi[0], odpi[1], odpi[3]);
+    for(i=0; i<NODES*NODES; i++){
+        odp.push_back(odpi[i]);
+    }
+        
+    fwolfe(nodes, start, end, odp, &linknum);   //link cost recalculate (table:odp))
+    for (int i = 0; i<ODNUM; i++){
+        (LI+i)->cost = dijkstrafortable(start[i], end[i], nodes);   // upload OD travel time
+        //printf("%d st:%d cost:%.2f\n", i, start[i], (LI+i)->cost);
+    }
+        
     for(i = 0; i < NODES; i++){ 
         for(j = 0; j < NODES; j++){
             oip[i] += odp[i*NODES+j];
@@ -133,11 +134,15 @@ int main(void) {
     }
 
     enep = energy(oi, dj, c, oip, djp, cp, odp);
+    cout << "COST: " << c << ", INI:" << cp << ", Energy:" << enep << endl;
     //printf("INITIAL error: O=%f, D=%f, OD=%f", ermsqod(oi, oip), ermsqod(dj, djp), ermsq(od, odp));
-    //printf("%d, %d, %d, %d\n", cellchoice(), cellchoice(), cellchoice(), cellchoice());
+
+    for (i = 0; i < LINKS; i++){
+        odz.push_back(odp[i]);        // odp:previous accepted table  odz:this iteration table
+    }
     
     ///////////////////////////////////////////////////////////////
-    
+        
     for(h=0; h < TRY; h++){
         out[hh]   = -99.0;
         outO[hh]  = -99.0;
@@ -151,9 +156,9 @@ int main(void) {
         int it_limit = 5;
         
         for (i = 0; i < LINKS; i++){
-            *(odz + i) = *(odp + i);    //update (accepted sample)
+            odz[i] = odp[i];        //update (accepted sample)
         }
-        
+
         if(h % 3 == 0){ // Exchange
             while(it < it_limit){
                 rem = cellchoice();
@@ -179,6 +184,12 @@ int main(void) {
                 it += 1;
             }
         }
+
+        fwolfe(nodes, start, end, odz, &linknum);   //link cost recalculate (table:odp))
+        for (i = 0; i<ODNUM; i++){
+            (LI+i)->cost = dijkstrafortable(start[i], end[i], nodes);   // upload OD travel time
+            //printf("%d st:%d cost:%.2f\n", i, start[i], (LI+i)->cost);
+        }
         
         // total O & D & cost of sample 
         for(i = 0; i < NODES; i++){ 
@@ -191,6 +202,11 @@ int main(void) {
 
         ene = energy(oi, dj, c, oiz, djz, cz, odz);
         outOD[h] = sumod(oiz);
+        outC[hh] = cz;
+        outE[hh] = ene;
+        outEN[hh] = ent(odz);
+        outO[hh] = ermsqod(oi, oiz);
+        outD[hh] = ermsqod(dj, djz);
       
         if(BETA*(ene-enep) > 0){ // Accept *log(1)=0)
               accept++;
@@ -199,27 +215,22 @@ int main(void) {
               } else if(h % 3 == 2){
                   dec++;
               }
-                //   printf("Dene: %.2f, cost: %.1f \n", BETA*(ene - enep), cz);    //write
+                printf("Dene: %.2f, cost: %.1f \n", BETA*(ene - enep), cz);    //write
               enep = ene;
-              // printf("[%d]OK!\n", h);
+               printf("[%d]OK!\n", h);
               out[hh] = ermsq(od, odz);
-              outO[hh] = ermsqod(oi, oiz);
-              outD[hh] = ermsqod(dj, djz);
-              outE[hh] = ene;
-              outC[hh] = cz;
-              outEN[hh] = ent(odz);
-                   
+                  
               sprintf(fname, "D:/od-mcmc/c-result/res-od/odtable-%d.csv", h);//+TRY*2
               if ((fw = fopen(fname, "w")) != NULL){
                 for (i = 0; i < LINKS; i++){
-                    fprintf(fw, "%d\n", *(odz + i));
-                    *(odp + i) = *(odz + i);    //update (accepted sample)
+                    fprintf(fw, "%d\n", odz[i]);
+                    odp[i] = odz[i];    //update (accepted sample)
                 }
                 fclose(fw);
             }
         } else {
             ratio = exp(BETA*(ene - enep));
-                // printf("Dene: %.1f cost:%.1f, Ratio: %.3f\n", BETA*(ene - enep), cz, ratio);  //write
+                 printf("Dene: %.1f cost:%.1f, Ratio: %.3f\n", BETA*(ene - enep), cz, ratio);  //write
             if(isnan(ratio)==0){
                 if(ratio >= genrand_real3()){   // Accept
                     accept++;
@@ -229,19 +240,14 @@ int main(void) {
                       dec++;
                     }
                     enep = ene;
-                    // printf("[%d] POK!!\n", h);
+                     printf("[%d] POK!!\n", h);
                     out[hh] = ermsq(od, odz);
-                    outO[hh] = ermsqod(oi, oiz);
-                    outD[hh] = ermsqod(dj, djz);
-                    outE[hh] = ene;
-                    outC[hh] = cz;
-                    outEN[hh] = ent(odz);
                
                     sprintf(fname, "D:/od-mcmc/c-result/res-od/odtable-%d.csv", h);//+TRY*2
                     if ((fw = fopen(fname, "w")) != NULL){
                         for (i = 0; i < LINKS; i++){
-                            fprintf(fw, "%d\n", *(odz + i));
-                            *(odp + i) = *(odz + i);    //update (accepted sample)
+                            fprintf(fw, "%d\n", odz[i]);
+                            odp[i] = odz[i];    //update (accepted sample)
                         }
                         fclose(fw);
                     }
@@ -250,7 +256,7 @@ int main(void) {
                 printf("obtain NA...\n");
             }
         }
-        
+       
         if((hh+1 == MEM)||(h == TRY-1)){
             mrow = MEM;
             if(h == TRY -1){
@@ -315,16 +321,17 @@ int main(void) {
             co++;
         }
         hh++;
+        cout << hh << endl;
     }
     
     printf("\nACCEPT:%d (Inc:%d Dec:%d)", accept, inc, dec);
-    printf("\nTRUE: cost:%.2f sumod:%d entropy:%.3f", c, sumod(oi), ent(od));
+    //printf("\nTRUE: cost:%.2f sumod:%d entropy:%.3f", c, sumod(oi), ent(od));
 
     return 0;
 }
 
 /* ERROR of MEAN SQUARE */
-double ermsq (int *od, int *odz){
+double ermsq (vector<int> &od, vector<int> &odz){
     int i;
     double err = 0.0;
     double sd;
@@ -363,7 +370,7 @@ int sumod(int *oiz){
 }
 
 /* CALCULATE energy term  (equation (11) of resume at May 31)*/
-double energy (int *oi, int *dj, double c, int *oiz, int *djz, double cz, int *odz){
+double energy (int *oi, int *dj, double c, int *oiz, int *djz, double cz, vector<int> &odz){
     int total = 0;
     double conbi = 0.0;
     int i, rodz;
@@ -382,13 +389,13 @@ double energy (int *oi, int *dj, double c, int *oiz, int *djz, double cz, int *o
         ped += pow(*(djz + i) - *(dj + i), 2.0);
     }
     penal = ALPHA3 * pow(cz - c, 2) + ALPHA1 * peo + ALPHA1 * ped;
-     // printf("ent:%.1f peo:%.1f ped:%.1f Dc:%.1f\n", count, ALPHA1 * peo, ALPHA1 * ped, ALPHA3 * pow(cz - c, 2));    //write
+      printf("ent:%.1f peo:%.1f ped:%.1f Dc:%.1f\n", count, ALPHA1 * peo, ALPHA1 * ped, ALPHA3 * pow(cz - c, 2));    //write
     
     return count - penal;
 }
 
 /* CALCULATE energy term  (equation (11) of resume at May 31)*/
-double ent (int *odz){
+double ent (vector<int> &odz){
     int total = 0;
     double conbi = 0.0;
     int i, rodz;
