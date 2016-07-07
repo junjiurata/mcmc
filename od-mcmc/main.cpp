@@ -21,12 +21,13 @@
 #include <math.h>
 #include <stdlib.h>
 #include <cmath>
+#include <map>
 #include "fw.h"
 
 #define NODES 24
 #define LINKS 576   //24*24
 #define TRY 1 // number of sampling
-#define MEM 30000 // number of sampling
+#define MEM 20000 // number of sampling
 
 // exogenous parameter
 const double BETA   = 0.08;
@@ -35,7 +36,7 @@ const double ALPHA1 = 2.00;
 const int OBJ = LINKS - NODES;  // for cell choice
 
 // 構造体定義
-struct link{
+struct odpair{
 	int onode; 
 	int dnode; 
 	double cost; 
@@ -44,8 +45,8 @@ struct link{
 // 関数プロトタイプ
 void fileinod(int *od);
 void fileinod00(int *od);
-struct link *fileinli(void);
-double linkcost(int onode, int dnode, link *li);
+struct odpair *fileinli(void);
+double linkcost(int onode, int dnode, odpair *li);
 int fact(int n);
 double logfact(int n);
 double logfact3(int n);
@@ -57,11 +58,11 @@ int cellchoice();
 double ent(int *odz);
 
 // グローバル変数
-static struct link li[LINKS];
+static struct odpair li[LINKS];
 static int od[NODES*NODES];
 static int odz[NODES*NODES];   // sampled(final)
 static int odp[NODES*NODES];    // initial sample & accepted sample
-
+       
 // main
 int main(void) {
     int h, i, j, k, hh=0, co=1, mrow;
@@ -74,26 +75,51 @@ int main(void) {
     //double odt[NODES*NODES];
     char fname[50];
     int rem, add, outOD[MEM];//, outCELL[TRY]
-    int inc=0, dec=0;   // number of accepted 
+    int inc=0, dec=0;   // number of accepted
+    // FrankWorfe
+    map<int, Node> nodes;
+    vector<int> start;      //スタートノード
+    vector<int> end;        //エンドノード
+    vector<double> odflow;  //OD交通量
     FILE *fw;
 
-    ////////////////////////////////////////////////////////////////
-    // INITIAL SETTING
-    fileinod(od);
-        // printf("%d %d %d \n", od[0], od[1], od[2]);
-    struct link *LI = fileinli();
+    struct odpair *LI;// = fileinli();
         // printf("%d %d %d \n", (LI+1)->onode, (LI+1)->dnode, (LI+1)->cost);
- 
-    //* Parameter total O & D & cost of true value 
+
+    ////////////////////////////////////////////////////////////////
+    // True OD table
+    linkread(nodes);
+    iniod(start, end, odflow);
+    fwolfe(nodes, start, end, odflow);
+    int ODNUM = odflow.size();
+    /*
+    for (int i = 0; i<ODNUM; i++){
+        //if(odflow[i]!=0){
+        printf("%d\n", i);
+        (LI+i)->onode = start[i];
+        (LI+i)->dnode = end[i];
+        (LI+i)->cost = dijkstrafortable(start[i], end[i], nodes);
+        //}
+    }*/
+
+    fileinod(od);
+
     for(i = 0; i < NODES; i++){
         for(j = 0; j < NODES; j++){
-            oi[i] += od[i*NODES+j];
-            dj[i] += od[i+j*NODES];
-            c += od[i*NODES+j] * linkcost(i+1, j+1, LI);    // 104950
+            oi[i] += odflow[i*NODES+j];     // constraint condition
+            dj[i] += odflow[i+j*NODES];
+        //    c += od[i*NODES+j] * linkcost(i+1, j+1, LI);    // 
         }
     }
         // printf("%d %d %d \n", oi[0], oi[1], oi[2]);
         // printf("%d %d %d %.1f \n", dj[0], dj[1], dj[2], c);
+    
+    	//	for (int i = 0; i<ODNUM; i++){
+          //          if(odflow[i]!=0){
+	//		dijkstra(start[i], end[i], nodes, odflow[i]);
+          //          }
+	//	}
+
 
     //* Initial OD table 
     fileinod00(odp);
@@ -419,7 +445,7 @@ double logfact3(int n){
 }
 
 /* PICKUP a travel cost of OD */
-double linkcost(int onode, int dnode, link *li){
+double linkcost(int onode, int dnode, odpair *li){
     int i=0;
     double cost= -9999.9;   //path cost between onode and dnode
     while(cost == -9999.9 && i < LINKS){
@@ -493,7 +519,7 @@ void fileinod00(int *od){
 }
 
 /* READ a link file */
-struct link *fileinli(void){
+struct odpair *fileinli(void){
     FILE *fp;
     char *fname = "veh-time3.csv";
     int ret, onode, dnode;

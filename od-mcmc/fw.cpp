@@ -20,11 +20,10 @@
 #include "fw.h"
 using namespace std;
 
-#define MAX 10000
-#define EPS 10e-4
+const int MAX = 1;
+const double EPS = 10e-2;
 
 // #define DEBUG
-
 
 // ネットワークにノードとリンクを追加する
 void addLink(map<int, Node>& nodes, int from, int to, double a, double b){
@@ -85,6 +84,7 @@ void updateX(map<int, Node>& nodes, double al) {
 void dijkstra(int start, int end, map<int, Node>& nodes, double traf){
 #ifdef DEBUG
 	cerr << "ダイクストラ法" << endl;
+                cout << "O:" << start << " D:" << end << endl;
 #endif
 	for (map<int, Node>::iterator i = nodes.begin(); i != nodes.end(); i++) {
 		i->second.isDetermined = false;
@@ -112,13 +112,12 @@ void dijkstra(int start, int end, map<int, Node>& nodes, double traf){
 //				cerr << "doneNode=" << doneNode << endl;
 			}
 		}
-		if (doneNode == -1) break;
+		if (doneNode == -1) break;  // どういう状況？
 		nodes[doneNode].isDetermined = true;
 #ifdef DEBUG
-		cerr << "ノード " << doneNode << " のコストが " << nodes[doneNode].minCost << "に確定しました" << endl;
+		cerr << "ノード " << doneNode << " のコストが " << nodes[doneNode].minCost << "に確定" << endl;
 #endif
 		// ノードコストの更新
-		
 		for (unsigned int i = 0; i<nodes[doneNode].toNode.size(); i++){
 			int toNode = nodes[doneNode].toNode[i];
 			double cost = nodes[doneNode].minCost + nodes[doneNode].links[i].tt();
@@ -132,7 +131,7 @@ void dijkstra(int start, int end, map<int, Node>& nodes, double traf){
 	// 先行ポインタをたどる
 	int cur = end;
 #ifdef DEBUG
-	cerr << "最短経路を逆順にたどっています…" << endl;
+            cerr << "最短経路を逆順にたどっています…" << endl;
 #endif
 	while (cur != start) {
 #ifdef DEBUG
@@ -157,6 +156,60 @@ void dijkstra(int start, int end, map<int, Node>& nodes, double traf){
 #ifdef DEBUG
 	cerr << cur << endl;
 #endif
+}
+
+// ダイクストラ法で最短経路を計算し，そこに指定交通量を加える
+double dijkstrafortable(int start, int end, map<int, Node>& nodes){
+//#ifdef DEBUG
+	cerr << "ダイクストラ法fortable" << endl;
+                cout << "O:" << start << " D:" << end << endl;
+//#endif
+	for (map<int, Node>::iterator i = nodes.begin(); i != nodes.end(); i++) {
+		i->second.isDetermined = false;
+		i->second.isInf = true;
+		i->second.minCost = 0.0;
+	}
+	nodes[start].minCost = 0.0;
+	nodes[start].isInf = false;
+	while (1){
+//		cout << "nodes.size=" << nodes.size() << endl;
+		int doneNode = -1;
+		for (map<int, Node>::iterator i = nodes.begin(); i != nodes.end(); i++) {
+			if (i->second.isDetermined) {
+//				cerr << i->first << " is determined\n";
+			}
+			else if (i->second.isInf) {
+//				cerr << i->first << " is ∞\n";
+			}
+			else if (doneNode == -1) {
+				doneNode = i->first;
+//				cerr << "doneNode=-1 =>" << doneNode << endl;
+			}
+			else if (i->second.minCost < nodes[doneNode].minCost) {
+				doneNode = i->first;
+//				cerr << "doneNode=" << doneNode << endl;
+			}
+		}
+		if (doneNode == -1) break;  // どういう状況？: 更新対象がない状態
+		nodes[doneNode].isDetermined = true;
+//#ifdef DEBUG
+		cerr << "ノード " << doneNode << " のコストが " << nodes[doneNode].minCost << "に確定" << endl;
+//#endif
+                if(doneNode == end){    // dicstra 打ち切り
+                    return nodes[doneNode].minCost;
+                    break;
+                }
+		// ノードコストの更新
+		for (unsigned int i = 0; i<nodes[doneNode].toNode.size(); i++){
+			int toNode = nodes[doneNode].toNode[i];
+			double cost = nodes[doneNode].minCost + nodes[doneNode].links[i].tt();
+			if (nodes[toNode].isInf|| cost < nodes[toNode].minCost){
+				nodes[toNode].minCost = cost;
+				nodes[toNode].isInf = false;
+				nodes[toNode].fromNode = doneNode;
+			}
+		}
+	}
 }
 
 // 目的関数の値を計算する 
@@ -221,11 +274,7 @@ double convergence(map<int, Node>& nodes, double al, double linknum){
 	return errave;
 }
 
-	// ネットワークの構造を登録する
-	//map<int, Node> nodes;
-
-void linkread(map<int, Node>& nodes){   //????
-        
+void linkread(map<int, Node>& nodes){
         // 外部方からのデータ入力
         // linkデータ 始点ノード,終点ノード，旅行時間パラa，旅行時間パラb の要素を持つ
         Csv link("SiouxLinks2_mody.csv", ',' , true);
@@ -266,53 +315,61 @@ void linkread(map<int, Node>& nodes){   //????
 	}
 }
 
-void iniod(){
+void iniod(vector<int> &start, vector<int> &end, vector<double> &odflow){
         // odデータ スタートノード，エンドノード，OD交通量 の要素を持つ
-        Csv od("SiouxOD_mody.csv", ',' , true);
+        Csv od("odtable-row3.csv", ',' , true);
 
 	//OD交通量の読み込み
-	int ODNUM;
-	ODNUM = od.getNumLines();
+	int ODNUM = od.getNumLines();
         cout << ODNUM << endl;
-	vector<int> START;      //スタートノード
-	vector<int> END;        //エンドノード
-	vector<double> ODFLOW;  //OD交通量
+	//vector<int> START;      //スタートノード
+	//vector<int> END;        //エンドノード
+	//vector<double> ODFLOW;  //OD交通量
         int ori;
         std::string sori;
         double tra;
         std::string stra;
-	for (int i = 0; i<ODNUM; i++){
+	for (int i = 0; i < ODNUM; i++){
                 sori = od.getData(i,"ORIG");
                 ori = std::atoi(sori.c_str());
-		START.push_back(ori);
+		start.push_back(ori);
                 
                 sori = od.getData(i,"DEST");
                 ori = std::atoi(sori.c_str());
-		END.push_back(ori);
+		end.push_back(ori);
                 
                 stra = od.getData(i,"TRAF");
                 tra = std::atof(stra.c_str());
-		ODFLOW.push_back(tra);
+		odflow.push_back(tra);
 	}
 }
 
-/*
-void fw(){
-	// 最短経路を自由流旅行時間（交通量０のとき）で計算し，All-or-nothingを行う
+void fwolfe(map<int, Node>& nodes, vector<int> &start, vector<int> &end, vector<double> &odflow){
+        int ODNUM = start.size();
+        // 最短経路を自由流旅行時間（交通量０のとき）で計算し，All-or-nothingを行う
+	int LINKNUM;
+	LINKNUM = link.getNumLines();
+        cout << ODNUM << ", " << LINKNUM << endl;
+
 	clearY(nodes);
-	for (int i = 0; i<ODNUM; i++){
-		dijkstra(START[i], END[i], nodes, ODFLOW[i]);
+
+        for (int i = 0; i<ODNUM; i++){
+            if(odflow[i]!=0){
+		dijkstra(start[i], end[i], nodes, odflow[i]);
+            }
 	}
 
 	// 初期リンク交通量を計算
 	updateX(nodes, 1.0);
-
+        
 	// ここからFrank-Wolfeのループ
 	for (int k = 0; k<MAX; k++) {
 		// 最短経路を計算しAll-or-nothingを行う
 		clearY(nodes);
 		for (int i = 0; i<ODNUM; i++){
-			dijkstra(START[i], END[i], nodes, ODFLOW[i]);
+                    if(odflow[i]!=0){
+			dijkstra(start[i], end[i], nodes, odflow[i]);
+                    }
 		}
 		// 黄金分割法により最適なαを計算する
 		double alpha = gold(nodes);
@@ -332,4 +389,3 @@ void fw(){
 	printLinkData(nodes);
 }
 
-*/
