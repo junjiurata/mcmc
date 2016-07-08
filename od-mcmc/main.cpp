@@ -26,8 +26,8 @@
 
 #define NODES 24
 #define LINKS 576   //24*24
-#define TRY 15000   // number of sampling
-#define MEM 30000   // number of sampling
+#define TRY 350000   // number of sampling
+#define MEM 25000   // number of sampling
 
 // exogenous parameter
 const double BETA   = 0.08;
@@ -59,31 +59,39 @@ double ent(vector<int> &odz);
 
 // グローバル変数
 static struct odpair li[LINKS];
-//static int od[NODES*NODES];
-//static int odz[NODES*NODES];   // sampled(final)
-static int odpi[NODES*NODES];    // initial sample & accepted sample
        
 // main
 int main(void) {
-    int h, i, j, k, hh=0, co=1, mrow;
+    volatile int h, hh, hhh; //コンパイラによる最適化防止
+    int i, j, k, co=1, mrow;
     int accept=0;
     int oi[NODES]={}, dj[NODES]={};
     int oip[NODES]={}, djp[NODES]={};
+    int odpi[NODES*NODES];    // initial sample & accepted sample
     double ene, enep, ratio, c=0.0, cp=0.0;
     init_genrand((unsigned)time(NULL));
-    double out[MEM], outO[MEM], outD[MEM], outE[MEM], outC[MEM], outEN[MEM];
     char fname[50];
-    int rem, add, outOD[MEM];
+    int rem, add, *outOD;
+    double *out, *outO, *outD, *outE, *outC, *outEN;
     int inc=0, dec=0;   // number of accepted
+        // メモリ確保
+        outOD = new int[MEM];
+        out = new double[MEM];
+        outO = new double[MEM];
+        outD = new double[MEM];
+        outE = new double[MEM];
+        outC = new double[MEM];
+        outEN = new double[MEM];
     // FrankWorfe
-    map<int, Node> nodes;
     int linknum, ODNUM;
+    map<int, Node> nodes;
     vector<int> start;      //スタートノード
     vector<int> end;        //エンドノード
     vector<int> od;         //OD交通量
     vector<int> odp;
     vector<int> odz;
     FILE *fw;
+    // Read
     struct odpair *LI = fileinli();
 
     ////////////////////////////////////////////////////////////////
@@ -142,14 +150,14 @@ int main(void) {
     }
     
     ///////////////////////////////////////////////////////////////
-        
+    hh = 0;    
     for(h=0; h < TRY; h++){
+    //    cout << h << endl;
         out[hh]   = -99.0;
-        outO[hh]  = -99.0;
-        outD[hh]  = -99.0;
-        outE[hh]  = -99.0;
-        outC[hh]  = -99.0;
-        //outCELL[h] = 0;
+    //    outO[hh]  = -99.0;
+    //    outD[hh]  = -99.0;
+    //    outE[hh]  = -99.0;
+    //    outC[hh]  = -99.0;
         int oiz[NODES]={}, djz[NODES]={};
         double cz= 0.0;
         int it = 0; //number of iteration
@@ -201,13 +209,13 @@ int main(void) {
         }
 
         ene = energy(oi, dj, c, oiz, djz, cz, odz);
-        outOD[h] = sumod(oiz);
+        outOD[hh] = sumod(oiz);
         outC[hh] = cz;
         outE[hh] = ene;
         outEN[hh] = ent(odz);
         outO[hh] = ermsqod(oi, oiz);
         outD[hh] = ermsqod(dj, djz);
-      
+                      
         if(BETA*(ene-enep) > 0){ // Accept *log(1)=0)
               accept++;
               if(h % 3 == 1){
@@ -215,7 +223,7 @@ int main(void) {
               } else if(h % 3 == 2){
                   dec++;
               }
-                printf("Dene: %.2f, cost: %.1f \n", BETA*(ene - enep), cz);    //write
+              //  printf("Dene: %.2f, cost: %.1f \n", BETA*(ene - enep), cz);    //write
               enep = ene;
                printf("[%d]OK!\n", h);
               out[hh] = ermsq(od, odz);
@@ -230,7 +238,7 @@ int main(void) {
             }
         } else {
             ratio = exp(BETA*(ene - enep));
-                 printf("Dene: %.1f cost:%.1f, Ratio: %.3f\n", BETA*(ene - enep), cz, ratio);  //write
+                // printf("Dene: %.1f cost:%.1f, Ratio: %.3f\n", BETA*(ene - enep), cz, ratio);  //write
             if(isnan(ratio)==0){
                 if(ratio >= genrand_real3()){   // Accept
                     accept++;
@@ -261,72 +269,75 @@ int main(void) {
             mrow = MEM;
             if(h == TRY -1){
                 mrow = TRY % MEM;
+                if(mrow == 0) mrow = MEM;
             }
             sprintf(fname, "D:/od-mcmc/c-result/errsd%d.csv", co);
             if ((fw = fopen(fname, "w")) != NULL){
-                for (hh = 0; hh < mrow; hh++){
-                    fprintf(fw, "%f\n", *(out + hh));
+                for (hhh = 0; hhh < mrow; hhh++){
+                    fprintf(fw, "%f\n", *(out + hhh));
                 }
                 fclose(fw);
             }
             sprintf(fname, "D:/od-mcmc/c-result/errsd-o%d.csv", co);
             if ((fw = fopen(fname, "w")) != NULL){
-                for (hh = 0; hh < mrow; hh++){
-                	fprintf(fw, "%f\n", *(outO + hh));
+                for (hhh = 0; hhh < mrow; hhh++){
+                    fprintf(fw, "%f\n", *(outO + hhh));
                 }
                 fclose(fw);
             }
             sprintf(fname, "D:/od-mcmc/c-result/errsd-d%d.csv", co);
             if ((fw = fopen(fname, "w")) != NULL){
-                for (hh = 0; hh < mrow; hh++){
-                	fprintf(fw, "%f\n", *(outD + hh));
+                for (hhh = 0; hhh < mrow; hhh++){
+                	fprintf(fw, "%f\n", *(outD + hhh));
                 }
                 fclose(fw);
             }
             sprintf(fname, "D:/od-mcmc/c-result/energy%d.csv", co);
             if ((fw = fopen(fname, "w")) != NULL){
-                for (hh = 0; hh < mrow; hh++){
-                	fprintf(fw, "%f\n", *(outE + hh));
+                for (hhh = 0; hhh < mrow; hhh++){
+                	fprintf(fw, "%f\n", *(outE + hhh));
                 }
                 fclose(fw);
              }
             sprintf(fname, "D:/od-mcmc/c-result/cost%d.csv", co);
             if ((fw = fopen(fname, "w")) != NULL){
-                for (hh = 0; hh < mrow; hh++){
-                    fprintf(fw, "%f\n", *(outC + hh));
+                for (hhh = 0; hhh < mrow; hhh++){
+                    fprintf(fw, "%f\n", *(outC + hhh));
                 }
                 fclose(fw);
             }
             sprintf(fname, "D:/od-mcmc/c-result/totalod%d.csv", co);
             if ((fw = fopen(fname, "w")) != NULL){
-                for (hh = 0; hh < mrow; hh++){
-                    fprintf(fw, "%d\n", *(outOD + hh));
+                for (hhh = 0; hhh < mrow; hhh++){
+                    fprintf(fw, "%d\n", *(outOD + hhh));
                 }
                 fclose(fw);
             }
-            //if ((fw = fopen("D:/od-mcmc/c-result/cell0.csv", "w")) != NULL){
-            //	for (h = 0; h < TRY; h++){
-            //		fprintf(fw, "%d\n", *(outCELL + h));
-            //	}
-            //	fclose(fw);
-            //   }
             sprintf(fname, "D:/od-mcmc/c-result/entropy%d.csv", co);
             if ((fw = fopen(fname, "w")) != NULL){
-                for (hh = 0; hh < mrow; hh++){
-                    fprintf(fw, "%f\n", *(outEN + hh));
+                for (hhh = 0; hhh < mrow; hhh++){
+                    fprintf(fw, "%f\n", *(outEN + hhh));
                 }
                 fclose(fw);
             }
             hh = -1;
             co++;
+            printf("\nACCEPT:%d (Inc:%d Dec:%d)\n", accept, inc, dec);
         }
         hh++;
-        cout << hh << endl;
     }
     
     printf("\nACCEPT:%d (Inc:%d Dec:%d)", accept, inc, dec);
-    //printf("\nTRUE: cost:%.2f sumod:%d entropy:%.3f", c, sumod(oi), ent(od));
+    printf("\nTRUE: cost:%.2f sumod:%d entropy:%.3f", c, sumod(oi), ent(od));
 
+    // メモリ解放
+    delete[] outOD;
+    delete[] out;
+    delete[] outO;
+    delete[] outD;
+    delete[] outE;
+    delete[] outC;
+    delete[] outEN;    
     return 0;
 }
 
@@ -389,7 +400,7 @@ double energy (int *oi, int *dj, double c, int *oiz, int *djz, double cz, vector
         ped += pow(*(djz + i) - *(dj + i), 2.0);
     }
     penal = ALPHA3 * pow(cz - c, 2) + ALPHA1 * peo + ALPHA1 * ped;
-      printf("ent:%.1f peo:%.1f ped:%.1f Dc:%.1f\n", count, ALPHA1 * peo, ALPHA1 * ped, ALPHA3 * pow(cz - c, 2));    //write
+    //  printf("ent:%.1f peo:%.1f ped:%.1f Dc:%.1f\n", count, ALPHA1 * peo, ALPHA1 * ped, ALPHA3 * pow(cz - c, 2));    //write
     
     return count - penal;
 }
