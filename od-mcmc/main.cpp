@@ -26,7 +26,7 @@
 
 #define NODES 24
 #define LINKS 576   //24*24
-#define TRY 350000   // number of sampling
+#define TRY 150000   // number of sampling
 #define MEM 25000   // number of sampling
 
 // exogenous parameter

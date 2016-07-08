@@ -20,7 +20,7 @@
 #include "fw.h"
 using namespace std;
 
-const int MAX = 1;
+const int MAX = 1000;
 const double EPS = 10e-2;
 
 // #define DEBUG
@@ -117,6 +117,9 @@ void dijkstra(int start, int end, map<int, Node>& nodes, int traf){
 #ifdef DEBUG
 		cerr << "ノード " << doneNode << " のコストが " << nodes[doneNode].minCost << "に確定" << endl;
 #endif
+                if(doneNode == end){    // dijkstra 終端ノードが確定したら打ち切り
+                    break;
+                }
 		// ノードコストの更新
 		for (unsigned int i = 0; i<nodes[doneNode].toNode.size(); i++){
 			int toNode = nodes[doneNode].toNode[i];
@@ -372,8 +375,7 @@ void fwolfe(map<int, Node>& nodes, vector<int> &start, vector<int> &end, vector<
 		//収束の判定
 		double ERR = convergence(nodes, alpha, *LINKNUM);
 		if (ERR < EPS){
-                        printf("%d回目で", k);
-                        cout << "収束しました。\n";
+                    //    cout << k << " 回目で収束" << endl;
 			break;
 		}
 #ifdef DEBUG
