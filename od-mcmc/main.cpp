@@ -24,7 +24,7 @@
 #include <map>
 #include "fw.h"
 
-#define NODES 24
+//#define NODES 24 -> define at fw.h
 #define LINKS 576   //24*24
 #define TRY 150000   // number of sampling
 #define MEM 25000   // number of sampling
@@ -32,15 +32,15 @@
 // exogenous parameter
 const double BETA   = 0.08;
 const double ALPHA3 = 10e-11; // ALPHA3/ALPHA1 = 10000 ~ 500000, small dif of OD cost: 1/100
-const double ALPHA1 = 2.00;
+const double ALPHA1 = 2.0;
 const int OBJ = LINKS - NODES;  // for cell choice
 
 // 構造体定義
-struct odpair{
+/*extern struct odpair{
 	int onode; 
 	int dnode; 
 	double cost; 
-};
+};*/
 
 // 関数プロトタイプ
 //void fileinod(int *od);
@@ -101,13 +101,16 @@ int main(void) {
     iniod(start, end, od);
     fwolfe(nodes, start, end, od, &linknum);
     ODNUM = od.size();
-        //cout << "ODNUM "<< ODNUM << endl;
+    //    cout << "ODNUM "<< ODNUM << endl;
     
-    for (int i = 0; i<ODNUM; i++){
+    for (i = 0; i<ODNUM; i++){
         (LI+i)->onode = start[i];
         (LI+i)->dnode = end[i];
-        (LI+i)->cost = dijkstrafortable(start[i], end[i], nodes);
-        //printf("%d st:%d cost:%.2f\n", i, start[i], (LI+i)->cost);
+        // Onodeごとに最短経路コストを計算
+        if(end[i]==1){  //dnode=1のときに計算。OnodeからのDijkstraの1回分の計算を有効活用。
+            dijkstrafortablesup(start, i, LI, nodes);
+        }
+        //printf("%d st:%d end:%d cost:%.2f\n", i, start[i], end[i], (LI+i)->cost);
     }
 
     for(i = 0; i < NODES; i++){
@@ -128,8 +131,8 @@ int main(void) {
     }
         
     fwolfe(nodes, start, end, odp, &linknum);   //link cost recalculate (table:odp))
-    for (int i = 0; i<ODNUM; i++){
-        (LI+i)->cost = dijkstrafortable(start[i], end[i], nodes);   // upload OD travel time
+    for (i = 0; i<NODES; i++){
+        dijkstrafortablesup(start, i*NODES, LI, nodes);     // Onode更新ごと。
         //printf("%d st:%d cost:%.2f\n", i, start[i], (LI+i)->cost);
     }
         
@@ -194,10 +197,11 @@ int main(void) {
         }
 
         fwolfe(nodes, start, end, odz, &linknum);   //link cost recalculate (table:odp))
-        for (i = 0; i<ODNUM; i++){
-            (LI+i)->cost = dijkstrafortable(start[i], end[i], nodes);   // upload OD travel time
+        for (i = 0; i<NODES; i++){
+            dijkstrafortablesup(start, i*NODES, LI, nodes);     // Onode更新ごと。
             //printf("%d st:%d cost:%.2f\n", i, start[i], (LI+i)->cost);
         }
+
         
         // total O & D & cost of sample 
         for(i = 0; i < NODES; i++){ 

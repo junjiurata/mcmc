@@ -81,10 +81,10 @@ void updateX(map<int, Node>& nodes, double al) {
 }
 
 // ダイクストラ法で最短経路を計算し，そこに指定交通量を加える
-void dijkstra(int start, int end, map<int, Node>& nodes, int traf){
+void dijkstra(int start, int snode, vector<int> &end, map<int, Node>& nodes, vector<int> &odflow){
 #ifdef DEBUG
 	cerr << "ダイクストラ法" << endl;
-                cout << "O:" << start << " D:" << end << endl;
+                cout << "O:" << start << " ROW:" << snode <<endl;
 #endif
 	for (map<int, Node>::iterator i = nodes.begin(); i != nodes.end(); i++) {
 		i->second.isDetermined = false;
@@ -112,15 +112,15 @@ void dijkstra(int start, int end, map<int, Node>& nodes, int traf){
 //				cerr << "doneNode=" << doneNode << endl;
 			}
 		}
-		if (doneNode == -1) break;  // どういう状況？
+		if (doneNode == -1) break;  // どういう状況？: 更新対象がない状態
 		nodes[doneNode].isDetermined = true;
 #ifdef DEBUG
 		cerr << "ノード " << doneNode << " のコストが " << nodes[doneNode].minCost << "に確定" << endl;
 #endif
-                if(doneNode == end){    // dijkstra 終端ノードが確定したら打ち切り
-                    break;
-                }
-		// ノードコストの更新
+                //if(doneNode == end){    // dijkstra 終端ノードが確定したら打ち切り
+                //    break;
+                //}
+                // ノードコストの更新
 		for (unsigned int i = 0; i<nodes[doneNode].toNode.size(); i++){
 			int toNode = nodes[doneNode].toNode[i];
 			double cost = nodes[doneNode].minCost + nodes[doneNode].links[i].tt();
@@ -131,37 +131,41 @@ void dijkstra(int start, int end, map<int, Node>& nodes, int traf){
 			}
 		}
 	}
-	// 先行ポインタをたどる
-	int cur = end;
+        for(int j = 0; j < NODES; j++){
+            // 先行ポインタをたどる
+            int cur = end[j + snode];
+            //cerr << cur << endl;
 #ifdef DEBUG
-            cerr << "最短経路を逆順にたどっています…" << endl;
+                cerr << "最短経路を逆順にたどっています…" << endl;
 #endif
-	while (cur != start) {
+            while (cur != start) {  
 #ifdef DEBUG
-		cerr << cur << " ";
+                    cerr << cur << " ";
 #endif
-		int prev = nodes[cur].fromNode;
-		// たどった先のリンクのリストをチェックし，たどった元へのリンクを探す
-		bool isFound = false;
-		for (unsigned int i = 0; i<nodes[prev].toNode.size(); i++){
-			if (nodes[prev].toNode[i] == cur) {
-				nodes[prev].links[i].y += traf;
-				isFound = true;
-				break;
-			}
-		}
-		if (!isFound) {
-			cerr << "ノードが見つかりませんね" << endl;
-			exit(1);
-		}
-		cur = prev;
-	}
+                    int prev = nodes[cur].fromNode;
+                    // たどった先のリンクのリストをチェックし，たどった元へのリンクを探す
+                    bool isFound = false;
+                    for (unsigned int i = 0; i<nodes[prev].toNode.size(); i++){
+                            if (nodes[prev].toNode[i] == cur) {
+                                    nodes[prev].links[i].y += odflow[j + snode];
+                                    isFound = true;
+                                    break;
+                            }
+                    }
+                    if (!isFound) {
+                            cerr << "ノードが見つかりませんね" << endl;
+                            exit(1);
+                    }
+                    cur = prev;
+            }
 #ifdef DEBUG
-	cerr << cur << endl;
+            cerr << cur << endl;
 #endif
+        }
 }
 
-// ダイクストラ法で最短経路を計算し，そこに指定交通量を加える
+/*
+// ダイクストラ法で最短経路を計算し，OD間コストを求める
 double dijkstrafortable(int start, int end, map<int, Node>& nodes){
 #ifdef DEBUG
 	cerr << "ダイクストラ法fortable" << endl;
@@ -202,7 +206,63 @@ double dijkstrafortable(int start, int end, map<int, Node>& nodes){
                     return nodes[doneNode].minCost;
                     break;
                 }
-		// ノードコストの更新
+		// ノードコストの更新 (確定ノードの次ノード)
+		for (unsigned int i = 0; i<nodes[doneNode].toNode.size(); i++){
+			int toNode = nodes[doneNode].toNode[i];
+			double cost = nodes[doneNode].minCost + nodes[doneNode].links[i].tt();
+			if (nodes[toNode].isInf|| cost < nodes[toNode].minCost){
+				nodes[toNode].minCost = cost;
+				nodes[toNode].isInf = false;
+				nodes[toNode].fromNode = doneNode;
+			}
+		}
+	}
+}*/
+
+//double dijkstrafortable(int start, int end, map<int, Node>& nodes){
+
+void dijkstrafortablesup(vector<int> &start, int snode, odpair *li, map<int, Node>& nodes){
+#ifdef DEBUG
+	cerr << "ダイクストラ法fortable" << endl;
+                cout << "O:" << start[snode] << endl;
+#endif
+	for (map<int, Node>::iterator i = nodes.begin(); i != nodes.end(); i++) {
+		i->second.isDetermined = false;
+		i->second.isInf = true;
+		i->second.minCost = 0.0;
+	}
+	nodes[start[snode]].minCost = 0.0;
+	nodes[start[snode]].isInf = false;
+	while (1){
+//		cout << "nodes.size=" << nodes.size() << endl;
+		int doneNode = -1;
+		for (map<int, Node>::iterator i = nodes.begin(); i != nodes.end(); i++) {
+			if (i->second.isDetermined) {
+//				cerr << i->first << " is determined\n";
+			}
+			else if (i->second.isInf) {
+//				cerr << i->first << " is ∞\n";
+			}
+			else if (doneNode == -1) {
+				doneNode = i->first;
+//				cerr << "doneNode=-1 =>" << doneNode << endl;
+			}
+			else if (i->second.minCost < nodes[doneNode].minCost) {
+				doneNode = i->first;
+//				cerr << "doneNode=" << doneNode << endl;
+			}
+		}
+		if (doneNode == -1) break;  // どういう状況？: 更新対象がない状態
+		nodes[doneNode].isDetermined = true;
+#ifdef DEBUG
+		cerr << "ノード " << doneNode << " のコストが " << nodes[doneNode].minCost << "に確定" << endl;
+#endif
+                for(int j=0; j < NODES; j++){
+                    if(doneNode==(li+snode+j)->dnode){
+                        (li+snode+j)->cost = nodes[doneNode].minCost;
+                    }
+                }
+		// ノードコストの更新 (確定ノードの次ノード)
 		for (unsigned int i = 0; i<nodes[doneNode].toNode.size(); i++){
 			int toNode = nodes[doneNode].toNode[i];
 			double cost = nodes[doneNode].minCost + nodes[doneNode].links[i].tt();
@@ -353,8 +413,8 @@ void fwolfe(map<int, Node>& nodes, vector<int> &start, vector<int> &end, vector<
 	clearY(nodes);
 
         for (int i = 0; i<ODNUM; i++){
-            if(odflow[i]!=0){
-		dijkstra(start[i], end[i], nodes, odflow[i]);
+            if(end[i]==1){  //dnode=1のとき(onodeが変更されたとき)に計算。OnodeからのDijkstraの1回分の計算を有効活用。
+		dijkstra(start[i], i, end, nodes, odflow);
             }
 	}
 
@@ -366,8 +426,8 @@ void fwolfe(map<int, Node>& nodes, vector<int> &start, vector<int> &end, vector<
 		// 最短経路を計算しAll-or-nothingを行う
 		clearY(nodes);
 		for (int i = 0; i<ODNUM; i++){
-                    if(odflow[i]!=0){
-			dijkstra(start[i], end[i], nodes, odflow[i]);
+                    if(end[i]==1){  //dnode=1のとき(onodeが変更されたとき)に計算。OnodeからのDijkstraの1回分の計算を有効活用。
+                        dijkstra(start[i], i, end, nodes, odflow);
                     }
 		}
 		// 黄金分割法により最適なαを計算する

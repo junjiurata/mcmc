@@ -20,6 +20,8 @@
 #include <map>
 #include "Csv.h"
 
+#define NODES 24
+
 class Link {
 public:
 	// コンストラクタ
@@ -64,12 +66,19 @@ public:
 	int fromNode;
 };
 
+struct odpair{
+	int onode; 
+	int dnode; 
+	double cost; 
+};
+
 void addLink(map<int, Node>& nodes, int from, int to, double a, double b);
 void clearY(map<int, Node>& nodes);
 void printLinkData(map<int, Node>& nodes);
 void updateX(map<int, Node>& nodes, double al);
-void dijkstra(int start, int end, map<int, Node>& nodes, int traf);
-double dijkstrafortable(int start, int end, map<int, Node>& nodes);
+void dijkstra(int start, int snode, vector<int> &end, map<int, Node>& nodes, vector<int> &odflow);
+//double dijkstrafortable(int start, int end, map<int, Node>& nodes);
+void dijkstrafortablesup(vector<int> &start, int snode, odpair *li, map<int, Node>& nodes);
 double obj(double al, map<int, Node> nodes);
 double gold(map<int, Node>& nodes);
 double convergence(map<int, Node>& nodes, double al, double linknum);
