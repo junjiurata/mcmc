@@ -22,17 +22,19 @@
 #include <stdlib.h>
 #include <cmath>
 #include <map>
+#include <iomanip>
 #include "fw.h"
 
 //#define NODES 24 -> define at fw.h
 #define LINKS 576   //24*24
-#define TRY 150000   // number of sampling
-#define MEM 25000   // number of sampling
+#define TRY 225000   // number of sampling
+#define MEM  25000   // number of sampling (preserve one csv)
+#define MAX_CH  20    // number of Chain
 
 // exogenous parameter
-const double BETA   = 0.08;
-const double ALPHA3 = 10e-11; // ALPHA3/ALPHA1 = 10000 ~ 500000, small dif of OD cost: 1/100
-const double ALPHA1 = 2.0;
+const double BETA   = 0.03;
+const double ALPHA3 = 10e-10; // ALPHA3/ALPHA1 = 10000 ~ 500000, small dif of OD cost: 1/100
+const double ALPHA1 = 13.0;
 const int OBJ = LINKS - NODES;  // for cell choice
 
 // 構造体定義
@@ -44,7 +46,7 @@ const int OBJ = LINKS - NODES;  // for cell choice
 
 // 関数プロトタイプ
 //void fileinod(int *od);
-void fileinod00(int *od);
+//void fileinod00(int *od);
 struct odpair *fileinli(void);
 double linkcost(int onode, int dnode, odpair *li);
 int fact(int n);
@@ -56,6 +58,7 @@ double ermsqod (int *oi, int *oiz);
 int sumod(int *oiz);
 int cellchoice();
 double ent(vector<int> &odz);
+double rand_normal(double mu, double sigma);
 
 // グローバル変数
 static struct odpair li[LINKS];
@@ -63,7 +66,7 @@ static struct odpair li[LINKS];
 // main
 int main(void) {
     volatile int h, hh, hhh; //コンパイラによる最適化防止
-    int i, j, k, co=1, mrow;
+    int i, j, k, p, co, mrow;
     int accept=0;
     int oi[NODES]={}, dj[NODES]={};
     int oip[NODES]={}, djp[NODES]={};
@@ -73,7 +76,7 @@ int main(void) {
     char fname[50];
     int rem, add, *outOD;
     double *out, *outO, *outD, *outE, *outC, *outEN;
-    int inc=0, dec=0;   // number of accepted
+    int inc=0, dec=0, chain=0;   // number of accepted
         // メモリ確保
         outOD = new int[MEM];
         out = new double[MEM];
@@ -92,7 +95,7 @@ int main(void) {
     vector<int> odz;
     FILE *fw;
     // Read
-    struct odpair *LI = fileinli();
+    struct odpair *LI = fileinli(); //直したい
 
     ////////////////////////////////////////////////////////////////
     // True OD table
@@ -102,9 +105,10 @@ int main(void) {
     fwolfe(nodes, start, end, od, &linknum);
     ODNUM = od.size();
     //    cout << "ODNUM "<< ODNUM << endl;
-    
+        
     for (i = 0; i<ODNUM; i++){
         (LI+i)->onode = start[i];
+        //LI[i].onode = start[i];
         (LI+i)->dnode = end[i];
         // Onodeごとに最短経路コストを計算
         if(end[i]==1){  //dnode=1のときに計算。OnodeからのDijkstraの1回分の計算を有効活用。
@@ -122,20 +126,29 @@ int main(void) {
         }
     }
     //cout << "COST: " << c << endl;
-    
+
+    for(p = 0; p < MAX_CH; p++){
+        co=1;
+        cout << "CHAIN: " << p << endl;
     //* Initial OD table 
-    fileinod00(odpi);   //randomにする
-        // printf("%d %d %d \n", odpi[0], odpi[1], odpi[3]);
+    double ran;
+    int rani;
     for(i=0; i<NODES*NODES; i++){
-        odp.push_back(odpi[i]);
+        ran = od[i] + rand_normal(od[i]/2, 1);  // randomにいれる
+        if(ran <= 0){
+            rani = 0;
+        } else {
+            rani = int(ran);
+        }
+        odp.push_back(rani);
     }
-        
+
     fwolfe(nodes, start, end, odp, &linknum);   //link cost recalculate (table:odp))
     for (i = 0; i<NODES; i++){
         dijkstrafortablesup(start, i*NODES, LI, nodes);     // Onode更新ごと。
         //printf("%d st:%d cost:%.2f\n", i, start[i], (LI+i)->cost);
     }
-        
+
     for(i = 0; i < NODES; i++){ 
         for(j = 0; j < NODES; j++){
             oip[i] += odp[i*NODES+j];
@@ -143,15 +156,15 @@ int main(void) {
             cp += odp[i*NODES+j] * linkcost(i+1, j+1, LI);
         }
     }
-
+ 
     enep = energy(oi, dj, c, oip, djp, cp, odp);
-    cout << "COST: " << c << ", INI:" << cp << ", Energy:" << enep << endl;
+    cout << fixed << setprecision(1) << "COST: " << c << ", INI:" << cp << ", Energy:" << enep << endl;
     //printf("INITIAL error: O=%f, D=%f, OD=%f", ermsqod(oi, oip), ermsqod(dj, djp), ermsq(od, odp));
 
     for (i = 0; i < LINKS; i++){
         odz.push_back(odp[i]);        // odp:previous accepted table  odz:this iteration table
     }
-    
+
     ///////////////////////////////////////////////////////////////
     hh = 0;    
     for(h=0; h < TRY; h++){
@@ -229,17 +242,19 @@ int main(void) {
               }
               //  printf("Dene: %.2f, cost: %.1f \n", BETA*(ene - enep), cz);    //write
               enep = ene;
-               printf("[%d]OK!\n", h);
+        //       printf("[%d]OK!\n", h);
               out[hh] = ermsq(od, odz);
                   
-              sprintf(fname, "D:/od-mcmc/c-result/res-od/odtable-%d.csv", h);//+TRY*2
+              sprintf(fname, "D:/od-mcmc/c-result/res-od/odtable-%d-%d.csv", p, h);//+TRY*2
               if ((fw = fopen(fname, "w")) != NULL){
                 for (i = 0; i < LINKS; i++){
                     fprintf(fw, "%d\n", odz[i]);
                     odp[i] = odz[i];    //update (accepted sample)
                 }
                 fclose(fw);
-            }
+              } else {
+                  cout << "ODtable保存のファイルが開けません" << endl;
+              }
         } else {
             ratio = exp(BETA*(ene - enep));
                 // printf("Dene: %.1f cost:%.1f, Ratio: %.3f\n", BETA*(ene - enep), cz, ratio);  //write
@@ -252,10 +267,10 @@ int main(void) {
                       dec++;
                     }
                     enep = ene;
-                     printf("[%d] POK!!\n", h);
+            //         printf("[%d] POK!!\n", h);
                     out[hh] = ermsq(od, odz);
                
-                    sprintf(fname, "D:/od-mcmc/c-result/res-od/odtable-%d.csv", h);//+TRY*2
+                    sprintf(fname, "D:/od-mcmc/c-result/res-od/odtable-%d-%d.csv", p, h);//+TRY*2
                     if ((fw = fopen(fname, "w")) != NULL){
                         for (i = 0; i < LINKS; i++){
                             fprintf(fw, "%d\n", odz[i]);
@@ -275,49 +290,49 @@ int main(void) {
                 mrow = TRY % MEM;
                 if(mrow == 0) mrow = MEM;
             }
-            sprintf(fname, "D:/od-mcmc/c-result/errsd%d.csv", co);
+            sprintf(fname, "D:/od-mcmc/c-result/errsd-%d-%d.csv", p, co);
             if ((fw = fopen(fname, "w")) != NULL){
                 for (hhh = 0; hhh < mrow; hhh++){
                     fprintf(fw, "%f\n", *(out + hhh));
                 }
                 fclose(fw);
             }
-            sprintf(fname, "D:/od-mcmc/c-result/errsd-o%d.csv", co);
+            sprintf(fname, "D:/od-mcmc/c-result/errsd-o-%d-%d.csv", p, co);
             if ((fw = fopen(fname, "w")) != NULL){
                 for (hhh = 0; hhh < mrow; hhh++){
                     fprintf(fw, "%f\n", *(outO + hhh));
                 }
                 fclose(fw);
             }
-            sprintf(fname, "D:/od-mcmc/c-result/errsd-d%d.csv", co);
+            sprintf(fname, "D:/od-mcmc/c-result/errsd-d-%d-%d.csv", p, co);
             if ((fw = fopen(fname, "w")) != NULL){
                 for (hhh = 0; hhh < mrow; hhh++){
                 	fprintf(fw, "%f\n", *(outD + hhh));
                 }
                 fclose(fw);
             }
-            sprintf(fname, "D:/od-mcmc/c-result/energy%d.csv", co);
+            sprintf(fname, "D:/od-mcmc/c-result/energy-%d-%d.csv", p, co);
             if ((fw = fopen(fname, "w")) != NULL){
                 for (hhh = 0; hhh < mrow; hhh++){
                 	fprintf(fw, "%f\n", *(outE + hhh));
                 }
                 fclose(fw);
              }
-            sprintf(fname, "D:/od-mcmc/c-result/cost%d.csv", co);
+            sprintf(fname, "D:/od-mcmc/c-result/cost-%d-%d.csv", p, co);
             if ((fw = fopen(fname, "w")) != NULL){
                 for (hhh = 0; hhh < mrow; hhh++){
                     fprintf(fw, "%f\n", *(outC + hhh));
                 }
                 fclose(fw);
             }
-            sprintf(fname, "D:/od-mcmc/c-result/totalod%d.csv", co);
+            sprintf(fname, "D:/od-mcmc/c-result/totalod-%d-%d.csv", p, co);
             if ((fw = fopen(fname, "w")) != NULL){
                 for (hhh = 0; hhh < mrow; hhh++){
                     fprintf(fw, "%d\n", *(outOD + hhh));
                 }
                 fclose(fw);
             }
-            sprintf(fname, "D:/od-mcmc/c-result/entropy%d.csv", co);
+            sprintf(fname, "D:/od-mcmc/c-result/entropy-%d-%d.csv", p, co);
             if ((fw = fopen(fname, "w")) != NULL){
                 for (hhh = 0; hhh < mrow; hhh++){
                     fprintf(fw, "%f\n", *(outEN + hhh));
@@ -330,6 +345,7 @@ int main(void) {
         }
         hh++;
     }
+}
     
     printf("\nACCEPT:%d (Inc:%d Dec:%d)", accept, inc, dec);
     printf("\nTRUE: cost:%.2f sumod:%d entropy:%.3f", c, sumod(oi), ent(od));
@@ -341,7 +357,8 @@ int main(void) {
     delete[] outD;
     delete[] outE;
     delete[] outC;
-    delete[] outEN;    
+    delete[] outEN;
+    
     return 0;
 }
 
@@ -494,14 +511,13 @@ int cellchoice(){
 }
 
 // Normal Distribution  // http://www.sat.t.u-tokyo.ac.jp/~omi/random_variables_generation.html#Gauss
-/*
 double rand_normal(double mu, double sigma){  //
     //double sigma = 1.0; //σ=1.0 fixed
     double z = sqrt(-2.0*log(genrand_real3())) * sin(2.0*M_PI*genrand_real3() );
     return mu + sigma * z;
- }*/
+ }
 
-/* READ a OD table file */
+/* READ a OD table file *//*
 void fileinod(int *od){
     FILE *fp;
     char *fname = "odtable-row2.csv";  // should be row style not table
@@ -523,7 +539,8 @@ void fileinod(int *od){
 
 void fileinod00(int *od){
     FILE *fp;
-     char *fname = "odtable-row-ini2.csv";  // should be row style not table
+    // char *fname = "odtable-row-ini2.csv";  // should be row style not table
+    char *fname = "odtable-row2.csv";  // should be row style not table
     //  char *fname = "odtable-119994.csv";  // should be row style not table
     int cell;
     int i =0, ret;
@@ -538,9 +555,9 @@ void fileinod00(int *od){
         i++;
     }
     fclose(fp);
-}
+}*/
 
-/* READ a link file */
+//READ a link file 
 struct odpair *fileinli(void){
     FILE *fp;
     char *fname = "veh-time3.csv";

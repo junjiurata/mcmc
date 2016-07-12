@@ -21,7 +21,7 @@
 using namespace std;
 
 const int MAX = 1000;
-const double EPS = 10e-2;
+const double EPS = 10e-3;
 
 // #define DEBUG
 
@@ -124,7 +124,7 @@ void dijkstra(int start, int snode, vector<int> &end, map<int, Node>& nodes, vec
 		for (unsigned int i = 0; i<nodes[doneNode].toNode.size(); i++){
 			int toNode = nodes[doneNode].toNode[i];
 			double cost = nodes[doneNode].minCost + nodes[doneNode].links[i].tt();
-			if (nodes[toNode].isInf|| cost < nodes[toNode].minCost){
+			if (nodes[toNode].isInf == true|| cost < nodes[toNode].minCost){
 				nodes[toNode].minCost = cost;
 				nodes[toNode].isInf = false;
 				nodes[toNode].fromNode = doneNode;
@@ -447,4 +447,3 @@ void fwolfe(map<int, Node>& nodes, vector<int> &start, vector<int> &end, vector<
 	//printLinkData(nodes);
         //printf("DIJKSTRA\n");
 }
-
