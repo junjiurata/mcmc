@@ -27,9 +27,9 @@
 
 //#define NODES 24 -> define at fw.h
 #define LINKS 576   //24*24
-#define TRY 225000   // number of sampling
-#define MEM  25000   // number of sampling (preserve one csv)
-#define MAX_CH   1   // number of Chain
+#define TRY 225   // number of sampling
+#define MEM  25   // number of sampling (preserve one csv)
+#define MAX_CH   5   // number of Chain
 
 // exogenous parameter
 const double BETA   = 0.03;
@@ -72,7 +72,7 @@ int main(void) {
     int oi[NODES]={}, dj[NODES]={};
     int oip[NODES]={}, djp[NODES]={};
     int odpi[NODES*NODES];    // initial sample & accepted sample
-    double ene, enep, ratio, c=0.0, cp=0.0;
+    double ene, enep, ratio, c=0.0, cp;
     init_genrand((unsigned)time(NULL));
     char fname[50];
     int rem, add, *outOD;
@@ -132,6 +132,7 @@ int main(void) {
 
     for(p = 0; p < MAX_CH; p++){
         co=1;
+        cp=0.0;
         cout << "CHAIN: " << p << endl;
         //* Initial OD table 
 
@@ -150,7 +151,11 @@ int main(void) {
             } else {
                 rani = int(ran);
             }
-            odp.push_back(rani);
+            if(p==0){
+                odp.push_back(rani);
+            } else {
+                odp[i] = rani;
+            }
         }
 
         fwolfe(nodes, start, end, odp, &linknum);   //link cost recalculate (table:odp))
@@ -161,7 +166,9 @@ int main(void) {
             //printf("%d st:%d cost:%.2f\n", i, start[i], (LI+i)->cost);
         }
 
-        for(i = 0; i < NODES; i++){ 
+        for(i = 0; i < NODES; i++){
+            oip[i]=0;
+            djp[i]=0;
             for(j = 0; j < NODES; j++){
                 oip[i] += odp[i*NODES+j];
                 djp[i] += odp[i+j*NODES];
@@ -174,7 +181,11 @@ int main(void) {
         //printf("INITIAL error: O=%f, D=%f, OD=%f", ermsqod(oi, oip), ermsqod(dj, djp), ermsq(od, odp));
 
         for (i = 0; i < LINKS; i++){
-            odz.push_back(odp[i]);        // odp:previous accepted table  odz:this iteration table
+            if(p==0){
+                odz.push_back(odp[i]);        // odp:previous accepted table  odz:this iteration table
+            } else {
+                odz[i] = odp[i];
+            }
         }
 
     ///////////////////////////////////////////////////////////////
