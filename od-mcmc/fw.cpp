@@ -20,8 +20,8 @@
 #include "fw.h"
 using namespace std;
 
-const int MAX = 1000;
-const double EPS = 10e-3;
+const int MAX = 2000;
+const double EPS = 10e-4;
 
 // #define DEBUG
 

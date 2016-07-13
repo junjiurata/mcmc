@@ -29,7 +29,7 @@
 #define LINKS 576   //24*24
 #define TRY 225000   // number of sampling
 #define MEM  25000   // number of sampling (preserve one csv)
-#define MAX_CH  20    // number of Chain
+#define MAX_CH   1   // number of Chain
 
 // exogenous parameter
 const double BETA   = 0.03;
@@ -59,6 +59,7 @@ int sumod(int *oiz);
 int cellchoice();
 double ent(vector<int> &odz);
 double rand_normal(double mu, double sigma);
+void fileinod00(int *od);
 
 // グローバル変数
 static struct odpair li[LINKS];
@@ -77,6 +78,8 @@ int main(void) {
     int rem, add, *outOD;
     double *out, *outO, *outD, *outE, *outC, *outEN;
     int inc=0, dec=0, chain=0;   // number of accepted
+        double czmax = 0.0;// あとで消す
+
         // メモリ確保
         outOD = new int[MEM];
         out = new double[MEM];
@@ -130,40 +133,49 @@ int main(void) {
     for(p = 0; p < MAX_CH; p++){
         co=1;
         cout << "CHAIN: " << p << endl;
-    //* Initial OD table 
-    double ran;
-    int rani;
-    for(i=0; i<NODES*NODES; i++){
-        ran = od[i] + rand_normal(od[i]/2, 1);  // randomにいれる
-        if(ran <= 0){
-            rani = 0;
-        } else {
-            rani = int(ran);
+        //* Initial OD table 
+
+/*        fileinod00(odpi);   //初期テーブル固定の場合
+            // printf("%d %d %d \n", odpi[0], odpi[1], odpi[3]);
+        for(i=0; i<NODES*NODES; i++){
+            odp.push_back(odpi[i]);
+        }*/
+
+        double ran;   //初期テーブルランダムの場合
+        int rani;
+        for(i=0; i<NODES*NODES; i++){
+            ran = od[i] + rand_normal(od[i]/2, 1);  // randomにいれる
+            if(ran <= 0){
+                rani = 0;
+            } else {
+                rani = int(ran);
+            }
+            odp.push_back(rani);
         }
-        odp.push_back(rani);
-    }
 
-    fwolfe(nodes, start, end, odp, &linknum);   //link cost recalculate (table:odp))
-    for (i = 0; i<NODES; i++){
-        dijkstrafortablesup(start, i*NODES, LI, nodes);     // Onode更新ごと。
-        //printf("%d st:%d cost:%.2f\n", i, start[i], (LI+i)->cost);
-    }
-
-    for(i = 0; i < NODES; i++){ 
-        for(j = 0; j < NODES; j++){
-            oip[i] += odp[i*NODES+j];
-            djp[i] += odp[i+j*NODES];
-            cp += odp[i*NODES+j] * linkcost(i+1, j+1, LI);
+        fwolfe(nodes, start, end, odp, &linknum);   //link cost recalculate (table:odp))
+        for (i = 0; i<NODES; i++){
+            if(end[i]==1){  //dnode=1のときに計算。OnodeからのDijkstraの1回分の計算を有効活用。
+                dijkstrafortablesup(start, i*NODES, LI, nodes);     // Onode更新ごと。
+            }
+            //printf("%d st:%d cost:%.2f\n", i, start[i], (LI+i)->cost);
         }
-    }
- 
-    enep = energy(oi, dj, c, oip, djp, cp, odp);
-    cout << fixed << setprecision(1) << "COST: " << c << ", INI:" << cp << ", Energy:" << enep << endl;
-    //printf("INITIAL error: O=%f, D=%f, OD=%f", ermsqod(oi, oip), ermsqod(dj, djp), ermsq(od, odp));
 
-    for (i = 0; i < LINKS; i++){
-        odz.push_back(odp[i]);        // odp:previous accepted table  odz:this iteration table
-    }
+        for(i = 0; i < NODES; i++){ 
+            for(j = 0; j < NODES; j++){
+                oip[i] += odp[i*NODES+j];
+                djp[i] += odp[i+j*NODES];
+                cp += odp[i*NODES+j] * linkcost(i+1, j+1, LI);
+            }
+        }
+
+        enep = energy(oi, dj, c, oip, djp, cp, odp);
+        cout << fixed << setprecision(1) << "COST: " << c << ", INI:" << cp << ", Energy:" << enep << endl;
+        //printf("INITIAL error: O=%f, D=%f, OD=%f", ermsqod(oi, oip), ermsqod(dj, djp), ermsq(od, odp));
+
+        for (i = 0; i < LINKS; i++){
+            odz.push_back(odp[i]);        // odp:previous accepted table  odz:this iteration table
+        }
 
     ///////////////////////////////////////////////////////////////
     hh = 0;    
@@ -209,22 +221,42 @@ int main(void) {
             }
         }
 
-        fwolfe(nodes, start, end, odz, &linknum);   //link cost recalculate (table:odp))
-        for (i = 0; i<NODES; i++){
-            dijkstrafortablesup(start, i*NODES, LI, nodes);     // Onode更新ごと。
-            //printf("%d st:%d cost:%.2f\n", i, start[i], (LI+i)->cost);
-        }
-
-        
         // total O & D & cost of sample 
-        for(i = 0; i < NODES; i++){ 
-            for(j = 0; j < NODES; j++){
-                oiz[i] += odz[i*NODES+j];
-                djz[i] += odz[i+j*NODES];
-                cz += odz[i*NODES+j] * linkcost(i+1, j+1, LI);
+        // test
+        double cz2 = 0.0;
+    //  if(h % 10 != 0){
+            for(i = 0; i < NODES; i++){ 
+                for(j = 0; j < NODES; j++){
+                    oiz[i] += odz[i*NODES+j];
+                    djz[i] += odz[i+j*NODES];
+                    cz2 += odz[i*NODES+j] * linkcost(i+1, j+1, LI);
+                }
             }
+            cz = cz2;
+    //  } else {    //FW回数の間引き
+        if(h % 50 == 0){
+            cz = 0.0;
+            fwolfe(nodes, start, end, odz, &linknum);   //link cost recalculate (table:odp))
+            for (i = 0; i<NODES; i++){
+                if(end[i]==1){  //dnode=1のときに計算。OnodeからのDijkstraの1回分の計算を有効活用。
+                    dijkstrafortablesup(start, i*NODES, LI, nodes);     // Onode更新ごと。
+                }
+                //printf("%d st:%d cost:%.2f\n", i, start[i], (LI+i)->cost);
+            }
+            // total O & D & cost of sample 
+            for(i = 0; i < NODES; i++){ 
+                for(j = 0; j < NODES; j++){
+                    oiz[i] += odz[i*NODES+j];
+                    djz[i] += odz[i+j*NODES];
+                    cz += odz[i*NODES+j] * linkcost(i+1, j+1, LI);
+                }
+            }
+            if(100 * abs(cz2/cz - 1) > czmax){
+                czmax = 100 * abs(cz2/cz - 1);
+            }
+            //cout << cz2 << " " << cz << " " << fixed << setprecision(3) << 100 * abs(cz2/cz - 1) << "%" << endl;
         }
-
+        
         ene = energy(oi, dj, c, oiz, djz, cz, odz);
         outOD[hh] = sumod(oiz);
         outC[hh] = cz;
@@ -242,7 +274,7 @@ int main(void) {
               }
               //  printf("Dene: %.2f, cost: %.1f \n", BETA*(ene - enep), cz);    //write
               enep = ene;
-        //       printf("[%d]OK!\n", h);
+            //   printf("[%d]OK!\n", h);
               out[hh] = ermsq(od, odz);
                   
               sprintf(fname, "D:/od-mcmc/c-result/res-od/odtable-%d-%d.csv", p, h);//+TRY*2
@@ -349,6 +381,7 @@ int main(void) {
     
     printf("\nACCEPT:%d (Inc:%d Dec:%d)", accept, inc, dec);
     printf("\nTRUE: cost:%.2f sumod:%d entropy:%.3f", c, sumod(oi), ent(od));
+    printf("\ncz/cz2 = %.3f", czmax);
 
     // メモリ解放
     delete[] outOD;
@@ -535,12 +568,12 @@ void fileinod(int *od){
     }
 
     fclose(fp);
-}
+}*/
 
 void fileinod00(int *od){
     FILE *fp;
-    // char *fname = "odtable-row-ini2.csv";  // should be row style not table
-    char *fname = "odtable-row2.csv";  // should be row style not table
+    char *fname = "odtable-row-ini2.csv";  // should be row style not table
+    //char *fname = "odtable-row2.csv";  // should be row style not table
     //  char *fname = "odtable-119994.csv";  // should be row style not table
     int cell;
     int i =0, ret;
@@ -555,7 +588,7 @@ void fileinod00(int *od){
         i++;
     }
     fclose(fp);
-}*/
+}
 
 //READ a link file 
 struct odpair *fileinli(void){
